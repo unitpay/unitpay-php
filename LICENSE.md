@@ -1,6 +1,6 @@
 The MIT License
 
-Copyright (c) 2013-2021 Unitpay (https://unitpay.ru)
+Copyright (c) 2013-2026 Unitpay (https://unitpay.ru)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

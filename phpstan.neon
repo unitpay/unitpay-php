@@ -1,0 +1,8 @@
+parameters:
+    # Level 5: strong analysis without demanding full scalar type declarations on
+    # the legacy single-file SDK (typed-everything is deferred — see F014 in the
+    # tech-debt audit). Raise once UnitPay.php gets real type declarations.
+    level: 5
+    paths:
+        - UnitPay.php
+        - tests
