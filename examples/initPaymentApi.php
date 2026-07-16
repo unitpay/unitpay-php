@@ -43,7 +43,7 @@ if (isset($response->result->type)
     // User redirect
     header("Location: " . $redirectUrl);
 
-// If without redirect (invoice)
+    // If without redirect (invoice)
 } elseif (isset($response->result->type)
     && $response->result->type === 'invoice') {
     // Url on receipt page in Unitpay
@@ -55,7 +55,17 @@ if (isset($response->result->type)
     // User redirect
     header("Location: " . $receiptUrl);
 
-// If error during api request
+    // If processed without redirect (e.g. recurring/subscription charge)
+} elseif (isset($response->result->type)
+    && $response->result->type === 'response') {
+    // Payment ID in Unitpay (you can save it)
+    $paymentId = $response->result->paymentId;
+    // Human-readable result message
+    $message = $response->result->message;
+    // Optional status page in Unitpay: $response->result->statusUrl
+    print $message;
+
+    // If error during api request
 } elseif (isset($response->error->message)) {
     $error = $response->error->message;
     print 'Error: '.$error;

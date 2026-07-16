@@ -15,7 +15,9 @@ try {
     // Validate request (check ip address, signature and etc)
     $unitpay->checkHandlerRequest();
 
-    list($method, $params) = [$_GET['method'], $_GET['params']];
+    // Read the validated request from the SDK (honours an injected request, not $_GET).
+    $method = $unitpay->getHandlerMethod();
+    $params = $unitpay->getHandlerParams();
 
     // Very important! Validate request with your order data, before complete order
     if (
@@ -33,23 +35,24 @@ try {
         case 'check':
             print $unitpay->getSuccessHandlerResponse('Check Success. Ready to pay.');
             break;
-        // Method Pay means that the money received
+            // Method Pay means that the money received
         case 'pay':
             // Please complete order
             print $unitpay->getSuccessHandlerResponse('Pay Success');
             break;
-        // Method Error means that an error has occurred.
+            // Method Preauth: two-stage payment — the money is only BLOCKED, not
+            // captured yet. Do NOT deliver goods/services here; wait for 'pay'.
+            // Just acknowledge so the notification isn't treated as failed.
+        case 'preauth':
+            print $unitpay->getSuccessHandlerResponse('Preauth received. Funds held, awaiting capture.');
+            break;
+            // Method Error means that an error has occurred.
         case 'error':
             // Please log error text.
             print $unitpay->getSuccessHandlerResponse('Error logged');
             break;
-        // Method Refund means that the money returned to the client
-        case 'refund':
-            // Please cancel the order
-            print $unitpay->getSuccessHandlerResponse('Order canceled');
-            break;
     }
-// Oops! Something went wrong.
+    // Oops! Something went wrong.
 } catch (Exception $e) {
     print $unitpay->getErrorHandlerResponse($e->getMessage());
 }
