@@ -1,19 +1,42 @@
 # Unitpay PHP SDK
 
+[![CI](https://github.com/unitpay/php-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/unitpay/php-sdk/actions/workflows/ci.yml)
+[![Latest Stable Version](https://img.shields.io/packagist/v/unitpay/php-sdk.svg)](https://packagist.org/packages/unitpay/php-sdk)
+[![PHP Version](https://img.shields.io/packagist/php-v/unitpay/php-sdk.svg)](https://packagist.org/packages/unitpay/php-sdk)
+[![Total Downloads](https://img.shields.io/packagist/dt/unitpay/php-sdk.svg)](https://packagist.org/packages/unitpay/php-sdk)
+[![License](https://img.shields.io/packagist/l/unitpay/php-sdk.svg)](LICENSE.md)
+
 PHP SDK for [Unitpay.ru](https://unitpay.ru).
 
-Documentation https://help.unitpay.ru
+Documentation: [help.unitpay.ru](https://help.unitpay.ru)
 
-## Examples ##
+## Requirements
 
-These are just some quick examples. Check out the samples
-in [`/examples`](https://github.com/unitpay/php-sdk/blob/master/examples).
+* PHP >= 7.4
+* ext-json
+
+No runtime dependencies. The whole SDK is a single file — [`UnitPay.php`](UnitPay.php) —
+exposing two classes in the **global namespace**: `UnitPay` and `CashItem`.
+
+## Examples
+
+These are just some quick examples. The [`examples/`](examples) folder has
+runnable samples for every method group:
+
+* [`initPaymentForm.php`](examples/initPaymentForm.php) / [`initPaymentApi.php`](examples/initPaymentApi.php) — create a payment (form / API)
+* [`paymentInfo.php`](examples/paymentInfo.php) — `getPayment`
+* [`handler.php`](examples/handler.php) — webhook handler (`check` / `pay` / `error`)
+* [`refund.php`](examples/refund.php) — `refundPayment`
+* [`twoStagePayment.php`](examples/twoStagePayment.php) — `confirmPayment` / `cancelPayment`
+* [`subscription.php`](examples/subscription.php) — list / info / close subscriptions
+* [`payout.php`](examples/payout.php) — payouts (mass-payment) + SBP bank list
+* [`accountApi.php`](examples/accountApi.php) — balance, commissions, rates, BIN, `offsetAdvance`, methods
 
 ### Payment integration using Unitpay form
 
 ```php
 <?php
-include ('../UnitPay.php');
+require __DIR__ . '/vendor/autoload.php';
 
 // Project Data
 $domain = 'unitpay.ru';// Your working domain: unitpay.ru or address provided by unitpay support service
@@ -50,6 +73,35 @@ $redirectUrl = $unitpay->form(
 header("Location: " . $redirectUrl);
 ```
 
+### Fiscal receipts (54-FZ)
+
+Attach receipt line items with `CashItem` and `setCashItems()` (works with both
+`form()` and `api('initPayment', ...)`). The constructor takes the required
+fields; optional fields are set via fluent setters and are serialized only when
+set:
+
+```php
+$item = new CashItem(
+    'Iphone 6 Skin Cover',              // name
+    1,                                  // count
+    900,                                // price
+    CashItem::NDS_20,                   // VAT rate
+    CashItem::PAYMENT_OBJECT_COMMODITY, // payment object
+    CashItem::PAYMENT_METHOD_PAYMENT_FULL
+);
+$item->setMeasure(CashItem::MEASURE_ITEM);
+
+$unitpay->setCashItems([$item]);
+```
+
+VAT rates (`NDS_*`), payment objects (`PAYMENT_OBJECT_*`), payment methods
+(`PAYMENT_METHOD_*`) and units of measure (`MEASURE_*`) are exposed as constants
+on `CashItem`.
+
+> Since 2026 the backend fiscalizes `NDS_20` (`vat20`) as VAT **22%** — there is
+> no separate path for "real" 20%. Pick the rate that matches the actual receipt
+> (see [CHANGELOG.md](CHANGELOG.md)).
+
 ### Payment integration using Unitpay API
 
 ```php
@@ -63,7 +115,7 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/payments/create-payment
  */
 
-include ('../UnitPay.php');
+require __DIR__ . '/vendor/autoload.php';
 
 // Project Data
 $domain = 'unitpay.ru';// Your working domain: unitpay.ru or address provided by unitpay support service
@@ -102,7 +154,7 @@ $response = $unitpay->api('initPayment', [
 
 // If need user redirect on Payment Gate
 if (isset($response->result->type)
-    && $response->result->type == 'redirect') {
+    && $response->result->type === 'redirect') {
     // Url on PaymentGate
     $redirectUrl = $response->result->redirectUrl;
     // Payment ID in Unitpay (you can save it)
@@ -112,7 +164,7 @@ if (isset($response->result->type)
 
 // If without redirect (invoice)
 } elseif (isset($response->result->type)
-    && $response->result->type == 'invoice') {
+    && $response->result->type === 'invoice') {
     // Url on receipt page in Unitpay
     $receiptUrl = $response->result->receiptUrl;
     // Payment ID in Unitpay (you can save it)
@@ -121,6 +173,16 @@ if (isset($response->result->type)
     $invoiceId = $response->result->invoiceId;
     // User redirect
     header("Location: " . $receiptUrl);
+
+// If processed without redirect (e.g. recurring/subscription charge)
+} elseif (isset($response->result->type)
+    && $response->result->type === 'response') {
+    // Payment ID in Unitpay (you can save it)
+    $paymentId = $response->result->paymentId;
+    // Human-readable result message
+    $message = $response->result->message;
+    // Optional status page in Unitpay: $response->result->statusUrl
+    print $message;
 
 // If error during api request
 } elseif (isset($response->error->message)) {
@@ -138,7 +200,7 @@ if (isset($response->result->type)
  *  Demo handler for your projects
  *
  */
-include ('../UnitPay.php');
+require __DIR__ . '/vendor/autoload.php';
 
 // Project Data
 $domain = 'unitpay.ru';// Your working domain: unitpay.ru or address provided by unitpay support service
@@ -194,25 +256,104 @@ try {
 }
 ```
 
-## Installation
+> The handler trusts a request only when the SHA-256 signature **and** the
+> source IP both match. The built-in IP allowlist changes on Unitpay's side from
+> time to time — override it with `$unitpay->setAllowedIps(['1.2.3.4', ...])`
+> instead of waiting for a release, and override `getIp()` if you run behind a
+> proxy.
 
-### Install composer package
-Set up `composer.json` in your project directory:
+## API methods
+
+All methods are called through `api('<method>', [...])`. `secretKey` is added
+automatically from the constructor, so pass only the business params below.
+Full parameters and response formats are in the
+[official API documentation](https://help.unitpay.ru).
+
+| Method | Required params | Purpose |
+| --- | --- | --- |
+| `initPayment` | `account`, `sum`, `projectId`, `paymentType` | Create a payment |
+| `getPayment` | `paymentId` | Payment info |
+| `refundPayment` | `paymentId` (+ optional `sum`) | Refund a payment (full or partial) |
+| `confirmPayment` | `paymentId` | Confirm (capture) a two-stage payment |
+| `cancelPayment` | `paymentId` | Cancel (release) a two-stage payment |
+| `listSubscriptions` | `projectId` (+ optional `all`) | List project subscriptions |
+| `getSubscription` | `subscriptionId` | Subscription info |
+| `closeSubscription` | `subscriptionId` | Close a subscription |
+| `getMethodsAvailable` | `projectId` | Payment methods available on the project |
+| `getCommissions` | `projectId`, `login` | Acquiring commissions for a project |
+| `getCurrencyCourses` | `login` | Currency conversion rates |
+| `getPartner` | `login` | Account balance |
+| `offsetAdvance` | `login`, `paymentId` (+ optional `cashItems`) | Advance-offset fiscal receipt |
+| `massPayment` | `login`, `transactionId`, `sum`, `purse`, `paymentType` (+ `memberId` for SBP) | Create a payout |
+| `massPaymentStatus` | `login`, `transactionId` | Payout status |
+| `massPaymentAvailableAmount` | `login`, `sum`, `purse`, `paymentType` | Balance available for payout |
+| `massPaymentCommissions` | `login` | Payout commissions |
+| `getSbpBankList` | `login` | SBP participant banks |
+| `getBinInfo` | `login`, `bin` | Card info by BIN |
+
+For the account-level methods (`getCommissions`, `getCurrencyCourses`,
+`getPartner`, `offsetAdvance` and all payout methods) the `secretKey` is the
+**account** key (profile), not the project key, and `login` is the account email.
+Pass the account key explicitly in the call — it overrides the constructor
+(project) key:
+
+```php
+$response = $unitpay->api('getPartner', [
+    'login'     => 'partner@example.com',
+    'secretKey' => $accountKey, // overrides the project key from the constructor
+]);
 ```
-{
-  "require":{"unitpay/php-sdk":"dev-master"}
+
+For SBP payouts pass `memberId` obtained from `getSbpBankList`.
+
+Example — refund a payment:
+
+```php
+$response = $unitpay->api('refundPayment', [
+    'paymentId' => 123456,
+    // 'sum' => 100, // optional: partial refund
+]);
+
+if (isset($response->result->message)) {
+    print $response->result->message;
+} elseif (isset($response->error->message)) {
+    print 'Error: ' . $response->error->message;
 }
 ```
 
-Run [composer](https://getcomposer.org/doc/00-intro.md#installation):
+Note: `confirmPayment` and `cancelPayment` return a top-level `message`
+(`$response->message`), not `$response->result->message`.
+
+## Installation
+
+### Composer (recommended)
+
 ```sh
-$ php composer.phar install
+composer require unitpay/php-sdk
+```
+
+Then load the Composer autoloader — its classmap registers both `UnitPay` and
+`CashItem`:
+
+```php
+require __DIR__ . '/vendor/autoload.php';
+```
+
+To follow the default branch (latest changes) instead of the newest tag:
+
+```sh
+composer require unitpay/php-sdk:dev-master
 ```
 
 ### Direct download
 
-Download [latest version](https://github.com/unitpay/php-sdk/archive/master.zip), unzip and copy to your project folder.
+Download the [latest version](https://github.com/unitpay/php-sdk/archive/master.zip),
+unzip it and `require` the single file directly:
 
-## Contributing ##
+```php
+require '/path/to/UnitPay.php';
+```
+
+## Contributing
 
 Please feel free to contribute to this project! Pull requests and feature requests welcome!
