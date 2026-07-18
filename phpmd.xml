@@ -26,6 +26,21 @@
         <!-- Retuned below rather than dropped, so genuinely complex future code still trips -->
         <exclude name="CyclomaticComplexity"/>
         <exclude name="NPathComplexity"/>
+        <exclude name="ExcessiveClassComplexity"/>
+    </rule>
+
+    <!--
+        UnitPay deliberately holds four responsibilities in one class (outbound
+        signing, API calls, webhook verification, handler responses), so its WMC
+        (sum of per-method complexities) grows with every API method and feature —
+        each of which is individually simple. Lift the class-complexity threshold
+        modestly rather than dropping the rule, so a genuinely tangled method
+        still trips it.
+    -->
+    <rule ref="rulesets/codesize.xml/ExcessiveClassComplexity">
+        <properties>
+            <property name="maximum" value="60"/>
+        </properties>
     </rule>
 
     <!--

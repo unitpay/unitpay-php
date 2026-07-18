@@ -514,6 +514,48 @@ final class UnitpayIpAllowlist
     }
 
     /**
+     * Whether $entry is a well-formed allowlist entry: an exact IPv4/IPv6 address
+     * or an "address/bits" CIDR range. Used to validate a fetched IP feed before
+     * it replaces the built-in list, so malformed JSON cannot empty the allowlist.
+     * @param string $entry
+     * @return bool
+     */
+    public static function isValidEntry($entry)
+    {
+        if (strpos($entry, '/') === false) {
+            return filter_var($entry, FILTER_VALIDATE_IP) !== false;
+        }
+        list($subnet, $bits) = explode('/', $entry, 2);
+        return ctype_digit($bits) && filter_var($subnet, FILTER_VALIDATE_IP) !== false;
+    }
+
+    /**
+     * Parse the published webhook IP feed body ({"webhooks":[...]}) into a
+     * validated, de-duplicated list of allowlist entries. Returns null on empty
+     * input, malformed JSON, a missing or non-array "webhooks" key, or when no
+     * entry is a well-formed IP/CIDR — so a bad feed can never empty the allowlist.
+     * @param string $body
+     * @return string[]|null
+     */
+    public static function parseWebhooksFeed($body)
+    {
+        if ($body === '') {
+            return null;
+        }
+        $data = json_decode($body, true);
+        if (!is_array($data) || !isset($data['webhooks']) || !is_array($data['webhooks'])) {
+            return null;
+        }
+        $valid = [];
+        foreach ($data['webhooks'] as $entry) {
+            if (is_string($entry) && self::isValidEntry($entry)) {
+                $valid[] = $entry;
+            }
+        }
+        return $valid === [] ? null : array_values(array_unique($valid));
+    }
+
+    /**
      * @param string $ip
      * @return string|null packed in_addr, or null when $ip is not a valid address
      */
@@ -555,6 +597,27 @@ final class UnitpayIpAllowlist
  */
 class UnitPay
 {
+    // Коды способов оплаты для параметра `paymentType` в api('initPayment', ...)
+    // и выплатах api('massPayment', ...). Источник истины — бэкенд; список кодов:
+    // https://help.unitpay.ru/book-of-reference/payment-system-codes
+    // paymentType здесь НЕ валидируется по этим значениям (как и словари CashItem),
+    // поэтому новый код оплаты не требует релиза SDK — константы дают лишь
+    // защиту от опечаток и автодополнение.
+    /** Пластиковые карты (приём по картам всего мира) */
+    public const PAYMENT_TYPE_CARD = 'card';
+    /** Зарубежные карты через форму банка-эквайера */
+    public const PAYMENT_TYPE_CARD_INVOICE = 'cardInvoice';
+    /** Система быстрых платежей (СБП) */
+    public const PAYMENT_TYPE_SBP = 'sbp';
+    /** SberPay */
+    public const PAYMENT_TYPE_SBERPAY = 'sberpay';
+    /** Tinkoff Pay */
+    public const PAYMENT_TYPE_TINKOFFPAY = 'tinkoffpay';
+    /** PayPal */
+    public const PAYMENT_TYPE_PAYPAL = 'paypal';
+    /** WebMoney (WMZ-кошельки) */
+    public const PAYMENT_TYPE_WEBMONEY = 'webmoney';
+
     // The supported api() methods are exactly the keys of this map; secretKey is
     // injected and validated by api(), so it is not listed among the required params.
     private $requiredUnitpayMethodsParams = [
@@ -600,6 +663,10 @@ class UnitPay
     private $handlerMethod;
     private $handlerParams;
     private $ipAllowlist;
+    // Merchant-specific IPs added via addAllowedIps(), always applied on top of the
+    // Unitpay list and preserved across refreshAllowedIps()/setAllowedIps().
+    private $customIps = [];
+    private $ipsUrl;
 
     /**
      * @param string $domain Host only, e.g. "unitpay.ru" — no scheme or path (it becomes "https://$domain/api").
@@ -616,15 +683,18 @@ class UnitPay
         $this->secretKey = $secretKey;
         $this->apiUrl = "https://$domain/api";
         $this->formUrl = "https://$domain/pay/";
+        $this->ipsUrl = "https://$domain/ips/ips_webhooks.json";
         $this->transport = $transport;
         $this->request = $request;
         $this->clientIp = $clientIp;
     }
 
     /**
-     * Override the list of Unitpay IP addresses allowed to call the handler.
-     * Replaces the built-in default entirely. Use it to keep the SDK in sync
-     * when the Unitpay infrastructure changes without waiting for a release.
+     * Override the Unitpay IP addresses allowed to call the handler. Replaces the
+     * built-in default (or a previously fetched list) entirely, but does NOT touch
+     * the merchant IPs added via addAllowedIps(), which stay applied on top. Use it
+     * to keep the SDK in sync when the Unitpay infrastructure changes without
+     * waiting for a release, or to feed back a list you fetched and cached yourself.
      * @link https://help.unitpay.ru/book-of-reference/ip-addresses
      * @param string[] $ips
      * @return $this
@@ -634,6 +704,71 @@ class UnitPay
         $this->supportedUnitpayIp = $ips;
         $this->ipAllowlist = null; // rebuild the matcher lazily on the next check
         return $this;
+    }
+
+    /**
+     * Add merchant-specific IPs/CIDR ranges (e.g. your own proxy/relay) on top of
+     * the Unitpay list. Unlike setAllowedIps(), which replaces the Unitpay list,
+     * these persist across refreshAllowedIps()/setAllowedIps() calls. De-duplicated.
+     * @param string[] $ips exact IPs and/or CIDR ranges
+     * @return $this
+     */
+    public function addAllowedIps(array $ips)
+    {
+        $this->customIps = array_values(array_unique(array_merge($this->customIps, $ips)));
+        $this->ipAllowlist = null; // rebuild the matcher lazily on the next check
+        return $this;
+    }
+
+    /**
+     * Fetch Unitpay's currently published webhook IPs from
+     * https://<domain>/ips/ips_webhooks.json and use them as the allowlist.
+     *
+     * Best-effort and fail-safe: on any transport/parse/validation failure the
+     * previously configured Unitpay list (the built-in default, or whatever
+     * setAllowedIps() last set) is kept unchanged — this never empties the list
+     * and never throws, so it is safe to chain before checkHandlerRequest(). A
+     * successful fetch REPLACES the Unitpay list (so a decommissioned IP drops
+     * out); merchant IPs added via addAllowedIps() are preserved and always apply
+     * on top.
+     *
+     * Verified TLS matters here (httpGet keeps CURLOPT_SSL_VERIFYPEER / verify_peer
+     * on): an unverified or spoofed list would defeat the IP gate.
+     *
+     * This makes a blocking network request — call it periodically (e.g. a daily
+     * cron) and cache getAllowedIps() on your side; do NOT call it on every webhook.
+     * @return $this
+     */
+    public function refreshAllowedIps()
+    {
+        $ips = $this->fetchUnitpayIps();
+        if ($ips !== null) {
+            $this->supportedUnitpayIp = $ips;
+            $this->ipAllowlist = null; // rebuild the matcher lazily on the next check
+        }
+        return $this;
+    }
+
+    /**
+     * Effective allowlist actually enforced by the handler: the Unitpay list plus
+     * the merchant additions, de-duplicated. Cache this after refreshAllowedIps()
+     * and feed it back via setAllowedIps() on webhook requests to avoid a network
+     * call per callback.
+     * @return string[]
+     */
+    public function getAllowedIps()
+    {
+        return array_values(array_unique(array_merge($this->supportedUnitpayIp, $this->customIps)));
+    }
+
+    /**
+     * Load and validate the published webhook IP feed.
+     * @return string[]|null validated non-empty list, or null on any failure
+     */
+    private function fetchUnitpayIps()
+    {
+        $body = $this->httpGet($this->ipsUrl);
+        return is_string($body) ? UnitpayIpAllowlist::parseWebhooksFeed($body) : null;
     }
 
     /**
@@ -689,7 +824,9 @@ class UnitPay
     protected function isAllowedIp($ip)
     {
         if ($this->ipAllowlist === null) {
-            $this->ipAllowlist = new UnitpayIpAllowlist($this->supportedUnitpayIp);
+            $this->ipAllowlist = new UnitpayIpAllowlist(
+                array_merge($this->supportedUnitpayIp, $this->customIps)
+            );
         }
         return $this->ipAllowlist->contains($ip);
     }
