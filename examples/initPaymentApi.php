@@ -15,11 +15,8 @@ $unitpay = new UnitPay($domain, $secretKey);
 
 /**
  * Base params: account, desc, sum, currency, projectId, paymentType
- * Additional params:
- *  Qiwi, Mc:
- *      phone
- * alfaClick:
- *      clientId
+ * paymentType — код способа оплаты из справочника (константы UnitPay::PAYMENT_TYPE_*):
+ *   card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney.
  *
  * @link https://help.unitpay.ru/payments/create-payment
  * @link https://help.unitpay.ru/book-of-reference/payment-system-codes
@@ -28,7 +25,7 @@ $response = $unitpay->api('initPayment', [
     'account' => $orderId,
     'desc' => $orderDesc,
     'sum' => $orderSum,
-    'paymentType' => 'yandex',
+    'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
     'currency' => $orderCurrency,
     'projectId' => $projectId,
 ]);

@@ -11,6 +11,12 @@ require_once('../UnitPay.php');
 
 $unitpay = new UnitPay($domain, $secretKey);
 
+// Keep the webhook IP allowlist current WITHOUT a network call per callback:
+// refresh it on a schedule (e.g. a daily cron) and cache the result —
+//   $ips = (new UnitPay($domain, $secretKey))->refreshAllowedIps()->getAllowedIps();
+// then feed the cached list here, plus any of your own IPs (proxy/relay):
+//   $unitpay->setAllowedIps($cachedIps)->addAllowedIps(['1.2.3.4']);
+
 try {
     // Validate request (check ip address, signature and etc)
     $unitpay->checkHandlerRequest();

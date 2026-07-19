@@ -135,19 +135,17 @@ $unitpay = new UnitPay($domain, $secretKey);
 
 /**
  * Base params: account, desc, sum, currency, projectId, paymentType
- * Additional params:
- *  Qiwi, Mc:
- *      phone
- * alfaClick:
- *      clientId
+ * paymentType — код способа оплаты из справочника (константы UnitPay::PAYMENT_TYPE_*):
+ *   card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney.
  *
  * @link https://help.unitpay.ru/payments/create-payment
+ * @link https://help.unitpay.ru/book-of-reference/payment-system-codes
  */
 $response = $unitpay->api('initPayment', [
     'account'     => $orderId,
     'desc'        => $orderDesc,
     'sum'         => $orderSum,
-    'paymentType' => 'yandex',
+    'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
     'currency'    => $orderCurrency,
     'projectId'   => $projectId
 ]);
@@ -258,9 +256,30 @@ try {
 
 > The handler trusts a request only when the SHA-256 signature **and** the
 > source IP both match. The built-in IP allowlist changes on Unitpay's side from
-> time to time — override it with `$unitpay->setAllowedIps(['1.2.3.4', ...])`
-> instead of waiting for a release, and override `getIp()` if you run behind a
-> proxy.
+> time to time, so keep it fresh from the published feed instead of waiting for a
+> release:
+>
+> * `$unitpay->refreshAllowedIps()` pulls the current list from
+>   `https://<domain>/ips/ips_webhooks.json`. It is fail-safe — on any network or
+>   parse error it keeps the built-in list and never throws. It makes a blocking
+>   HTTP request, so **don't call it on every webhook**: run it on a schedule
+>   (e.g. a daily cron), cache `getAllowedIps()`, and feed the cached list back
+>   with `setAllowedIps($cached)` in the handler.
+> * `$unitpay->addAllowedIps(['1.2.3.4', ...])` adds your own IPs (e.g. a proxy or
+>   relay) on top of the Unitpay list; they persist across `refreshAllowedIps()`.
+> * `$unitpay->setAllowedIps([...])` replaces the Unitpay list outright.
+> * Override `getIp()` if you run behind a proxy.
+>
+> ```php
+> // Cron: refresh once, cache the result on your side.
+> $ips = (new UnitPay($domain, $secretKey))->refreshAllowedIps()->getAllowedIps();
+> cache_set('unitpay_ips', $ips);
+>
+> // Handler: feed the cached list, no network call per callback.
+> (new UnitPay($domain, $secretKey))
+>     ->setAllowedIps(cache_get('unitpay_ips'))
+>     ->checkHandlerRequest();
+> ```
 
 ## API methods
 

@@ -1,5 +1,11 @@
 # Changelog
 
+### v2.2.0 от 23.07.2026
+* api(): added PAYMENT_TYPE_* constants for the current Unitpay payment-system codes (card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney) — convenience/typo-safety only, paymentType is still passed through unvalidated; the README and initPaymentApi example now use them instead of the deprecated, no-longer-supported qiwi/yandex/mc/alfaClick references
+* handler: added refreshAllowedIps() — pulls Unitpay's current webhook IPs from the published feed at the project domain's /ips/ips_webhooks.json and uses them as the allowlist; a successful fetch replaces the Unitpay list (so a decommissioned IP drops out), but it is fail-safe — on any transport/parse/validation error it keeps the built-in list and never throws, so it is safe to chain before checkHandlerRequest()
+* handler: added addAllowedIps() to add merchant-specific IPs/CIDR ranges (e.g. your own proxy/relay) on top of the Unitpay list; unlike setAllowedIps() they persist across refreshAllowedIps()/setAllowedIps()
+* handler: added getAllowedIps() returning the effective allowlist (Unitpay list + merchant additions) — cache it after refreshAllowedIps() and feed it back via setAllowedIps() to avoid a network call per webhook; UnitpayIpAllowlist::isValidEntry() validates a fetched IP/CIDR entry so malformed JSON can never empty the allowlist
+
 ### v2.1.0 от 21.07.2026
 * CashItem: synced the 54-FZ dictionaries with the current backend
   * Added VAT rates: vat5, vat7, vat22 and the computed rates vat105, vat107, vat110, vat120, vat122
