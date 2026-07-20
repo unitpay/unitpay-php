@@ -78,7 +78,7 @@ final class CashItemTest extends TestCase
         $this->assertSame(['numerator' => 1, 'denominator' => 3], $item->getMarkQuantity());
     }
 
-    /** A zero denominator (or non-positive fraction) is rejected, not silently stored. */
+    /** Нулевой знаменатель (или неположительная дробь) отклоняется, а не сохраняется молча. */
     public function testSetMarkQuantityRejectsNonPositiveValues()
     {
         $item = new CashItem('X', 1, 1.0);
@@ -87,35 +87,35 @@ final class CashItemTest extends TestCase
         $item->setMarkQuantity(1, 0);
     }
 
-    /** F016: count must be a positive number. */
+    /** count должен быть положительным числом. */
     public function testConstructorRejectsNonPositiveCount()
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 0, 10.0);
     }
 
-    /** F016: price must be non-negative. */
+    /** price должен быть неотрицательным. */
     public function testConstructorRejectsNegativePrice()
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 1, -5.0);
     }
 
-    /** A non-numeric count must be rejected, not slip past the range check. */
+    /** Нечисловой count должен быть отклонён, а не проскочить проверку диапазона. */
     public function testConstructorRejectsNonNumericCount()
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 'abc', 10.0);
     }
 
-    /** A non-numeric price must be rejected, not slip past the range check. */
+    /** Нечисловой price должен быть отклонён, а не проскочить проверку диапазона. */
     public function testConstructorRejectsNonNumericPrice()
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 1, 'xyz');
     }
 
-    /** Numeric strings are accepted and normalized to int/float. */
+    /** Числовые строки принимаются и нормализуются в int/float. */
     public function testConstructorNormalizesNumericStrings()
     {
         $item = new CashItem('X', '3', '9.5');
@@ -124,7 +124,7 @@ final class CashItemTest extends TestCase
         $this->assertSame(9.5, $item->getPrice());
     }
 
-    /** Fractional quantities (weight/volume goods) are preserved, not truncated to int. */
+    /** Дробные количества (весовые/объёмные товары) сохраняются, а не усекаются до int. */
     public function testConstructorPreservesFractionalCount()
     {
         $item = new CashItem('Cheese', 1.5, 500.0);

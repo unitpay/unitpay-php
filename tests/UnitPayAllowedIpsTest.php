@@ -8,17 +8,17 @@ use UnitpayIpException;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Dynamic webhook IP allowlist: refreshAllowedIps() pulls the published feed
- * (https://<domain>/ips/ips_webhooks.json), addAllowedIps() layers merchant IPs
- * on top, and every path is fail-safe (never empties the list, never throws).
+ * Динамический белый список IP вебхуков: refreshAllowedIps() загружает опубликованный
+ * фид (https://<domain>/ips/ips_webhooks.json), addAllowedIps() добавляет IP мерчанта
+ * поверх, и каждый путь fail-safe (никогда не опустошает список, не бросает исключений).
  */
 final class UnitPayAllowedIpsTest extends TestCase
 {
     private const SECRET = 'secret';
-    /** One of the shipped built-in defaults. */
+    /** Один из встроенных адресов по умолчанию. */
     private const DEFAULT_IP = '31.186.100.49';
 
-    /** Build a valid signed 'pay' webhook request. */
+    /** Строит корректный подписанный вебхук 'pay'. */
     private function validRequest(): array
     {
         $params = [
@@ -31,7 +31,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         return ['method' => 'pay', 'params' => $params];
     }
 
-    /** Handler whose IP-feed transport returns a fixed body for any URL. */
+    /** Обработчик, транспорт которого возвращает фиксированное тело для любого URL. */
     private function handler(string $feedBody, string $ip): UnitPay
     {
         return $this->handlerWithTransport(static function () use ($feedBody) {
@@ -39,7 +39,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         }, $ip);
     }
 
-    /** Handler with a caller-supplied transport (to simulate failures / capture the URL). */
+    /** Обработчик с заданным транспортом (для эмуляции сбоев / перехвата URL). */
     private function handlerWithTransport(callable $transport, string $ip): UnitPay
     {
         return new UnitPay('unitpay.ru', self::SECRET, $transport, $this->validRequest(), $ip);
@@ -50,11 +50,11 @@ final class UnitPayAllowedIpsTest extends TestCase
         return json_encode(['webhooks' => $ips]);
     }
 
-    // --- replace semantics ---------------------------------------------------
+    // --- семантика замены ----------------------------------------------------
 
     public function testFetchedIpNotInDefaultBecomesAllowed(): void
     {
-        $ip = '203.0.113.7'; // TEST-NET-3, not in the shipped default
+        $ip = '203.0.113.7'; // TEST-NET-3, нет в списке по умолчанию
         $unitPay = $this->handler($this->feed([$ip]), $ip);
 
         $this->assertTrue($unitPay->refreshAllowedIps()->checkHandlerRequest());
@@ -62,7 +62,7 @@ final class UnitPayAllowedIpsTest extends TestCase
 
     public function testDefaultIpDroppedByFetchIsRejected(): void
     {
-        // Feed no longer lists the built-in default → it must stop being trusted.
+        // Фид больше не содержит встроенный адрес → он должен перестать быть доверенным.
         $unitPay = $this->handler($this->feed(['203.0.113.7']), self::DEFAULT_IP);
         $unitPay->refreshAllowedIps();
 
@@ -70,12 +70,12 @@ final class UnitPayAllowedIpsTest extends TestCase
         $unitPay->checkHandlerRequest();
     }
 
-    // --- fail-safe fallback --------------------------------------------------
+    // --- fail-safe (безопасный откат) ----------------------------------------
 
     public function testTransportFailureKeepsBuiltinList(): void
     {
         $unitPay = $this->handlerWithTransport(static function () {
-            return false; // transport failure
+            return false; // сбой транспорта
         }, self::DEFAULT_IP);
 
         $this->assertTrue($unitPay->refreshAllowedIps()->checkHandlerRequest());
@@ -107,16 +107,16 @@ final class UnitPayAllowedIpsTest extends TestCase
         $unitPay = $this->handler($this->feed(['garbage', '999.999.999.999']), self::DEFAULT_IP);
 
         $this->assertTrue($unitPay->refreshAllowedIps()->checkHandlerRequest());
-        // fallback list still holds the shipped defaults, nothing junk was stored
+        // запасной список сохранил адреса по умолчанию, мусор не сохранён
         $this->assertContains(self::DEFAULT_IP, $unitPay->getAllowedIps());
         $this->assertNotContains('garbage', $unitPay->getAllowedIps());
     }
 
-    // --- merchant additions on top -------------------------------------------
+    // --- добавления мерчанта поверх ------------------------------------------
 
     public function testCustomIpSurvivesRefresh(): void
     {
-        $customIp = '198.51.100.5'; // TEST-NET-2, merchant's own relay
+        $customIp = '198.51.100.5'; // TEST-NET-2, собственный релей мерчанта
         $unitPay = $this->handler($this->feed(['203.0.113.7']), $customIp);
 
         $unitPay->addAllowedIps([$customIp])->refreshAllowedIps();
@@ -124,7 +124,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
 
-    // --- feed URL ------------------------------------------------------------
+    // --- URL фида ------------------------------------------------------------
 
     public function testRefreshFetchesTheCanonicalFeedUrl(): void
     {
@@ -139,7 +139,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertSame('https://unitpay.ru/ips/ips_webhooks.json', $captured);
     }
 
-    // --- CIDR from the feed --------------------------------------------------
+    // --- CIDR из фида --------------------------------------------------------
 
     public function testCidrRangeFromFeedIsHonoured(): void
     {
@@ -148,7 +148,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertTrue($unitPay->refreshAllowedIps()->checkHandlerRequest());
     }
 
-    // --- junk filtering ------------------------------------------------------
+    // --- фильтрация мусора ---------------------------------------------------
 
     public function testValidEntriesAppliedAndJunkDropped(): void
     {
@@ -176,22 +176,22 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertSame(['31.186.100.49', '51.250.20.9'], $unitPay->getAllowedIps());
     }
 
-    // --- matcher cache invalidation ------------------------------------------
+    // --- инвалидация кэша матчера --------------------------------------------
 
     public function testAddAllowedIpsInvalidatesTheMatcherCache(): void
     {
         $customIp = '198.51.100.5';
         $unitPay = $this->handler($this->feed([self::DEFAULT_IP]), $customIp);
 
-        // First check builds and caches the matcher without the custom IP → rejected.
+        // Первая проверка строит и кэширует матчер без кастомного IP → отклонение.
         try {
             $unitPay->checkHandlerRequest();
             $this->fail('expected the custom IP to be rejected before it is added');
         } catch (UnitpayIpException $e) {
-            // expected
+            // ожидаемо
         }
 
-        // Adding the IP must invalidate the cached matcher so the next check sees it.
+        // Добавление IP должно инвалидировать кэш матчера, чтобы следующая проверка его увидела.
         $unitPay->addAllowedIps([$customIp]);
         $this->assertTrue($unitPay->checkHandlerRequest());
     }

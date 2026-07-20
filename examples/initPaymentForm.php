@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Payment form
+ * Платёжная форма
  *
  * @link https://help.unitpay.ru/payments/create-payment-easy
  */

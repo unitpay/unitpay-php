@@ -1,27 +1,24 @@
 <?php
 
 /**
- * Typical sample of order
+ * Типовой пример данных заказа
  */
 
-// Project Data
 $domain = 'unitpay.ru';
 $projectId = 1;
-// Never hardcode secrets. Read them from the environment (or your config/secret store).
+// Никогда не храните секреты в коде — читайте их из окружения (или вашего хранилища секретов).
 $secretKey = getenv('UNITPAY_SECRET_KEY') ?: 'set-me-in-env';
 $publicId = '15155-ae12d';
 
-// My item Info
 $itemName = 'Iphone 6 Skin Cover';
 
-// My Order Data
 $orderId = 'a183f94-1434-1e44';
 $orderSum = 900;
 $orderDesc = 'Payment for item "' . $itemName . '"';
 $orderCurrency  = 'RUB';
 
-// Account-level API (payouts, getPartner, commissions, currency rates, BIN,
-// offsetAdvance) authenticates with the ACCOUNT key + login (profile), not the
-// project key. Pass these explicitly in api() to override the project key.
+// API уровня аккаунта (выплаты, getPartner, комиссии, курсы валют, BIN,
+// offsetAdvance) аутентифицируется ключом АККАУНТА + login (профиль), а не ключом
+// проекта. Передавайте их явно в api(), чтобы переопределить ключ проекта.
 $login = getenv('UNITPAY_LOGIN') ?: 'partner@example.com';
 $accountSecretKey = getenv('UNITPAY_ACCOUNT_SECRET_KEY') ?: 'set-account-key-in-env';

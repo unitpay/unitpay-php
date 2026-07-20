@@ -3,9 +3,9 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Two-stage payments: confirm (capture) or cancel (release) held funds.
- * Note: confirmPayment/cancelPayment return a top-level `message`,
- * not `result->message`.
+ * Двухстадийные платежи: confirm (списание) или cancel (разблокировка)
+ * заблокированных средств. Внимание: confirmPayment/cancelPayment возвращают
+ * `message` на верхнем уровне, а не `result->message`.
  *
  * @link https://help.unitpay.ru/api/confirm-payment
  * @link https://help.unitpay.ru/api/cancel-payment
@@ -18,10 +18,10 @@ $unitpay = new UnitPay($domain, $secretKey);
 
 $paymentId = 3403575;
 
-// Capture the held funds:
+// Списываем заблокированные средства.
 $response = $unitpay->api('confirmPayment', ['paymentId' => $paymentId]);
 
-// ...or release them without charging:
+// ...или разблокируем без списания.
 // $response = $unitpay->api('cancelPayment', ['paymentId' => $paymentId]);
 
 if (isset($response->message)) {

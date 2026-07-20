@@ -1,42 +1,43 @@
 <?php
 
 /**
- * Marker interface implemented by every exception this SDK throws, so callers can
- * catch all Unitpay-originated failures at once. Each concrete class also extends
- * the SPL exception it historically threw, so existing
- * catch (InvalidArgumentException | UnexpectedValueException) blocks keep working.
+ * Маркерный интерфейс, который реализуют все исключения этого SDK, чтобы вызывающий
+ * код мог перехватывать любые ошибки Unitpay одним catch. Каждый конкретный класс
+ * дополнительно наследует то SPL-исключение, которое исторически выбрасывалось,
+ * поэтому существующие блоки
+ * catch (InvalidArgumentException | UnexpectedValueException) продолжают работать.
  */
 interface UnitpayExceptionInterface
 {
 }
 
-/** Webhook signature did not match (possible forgery). */
+/** Подпись вебхука не совпала (возможна подделка). */
 class UnitpaySignatureException extends InvalidArgumentException implements UnitpayExceptionInterface
 {
 }
 
-/** Webhook arrived from an IP outside the allowlist. */
+/** Вебхук пришёл с IP-адреса вне белого списка. */
 class UnitpayIpException extends InvalidArgumentException implements UnitpayExceptionInterface
 {
 }
 
-/** api() could not obtain a usable response from Unitpay (network or decoding). */
+/** api() не смог получить пригодный ответ от Unitpay (сеть или разбор ответа). */
 class UnitpayTransportException extends InvalidArgumentException implements UnitpayExceptionInterface
 {
 }
 
-/** A method name is not supported by api() or the handler. */
+/** Метод не поддерживается api() или обработчиком. */
 class UnitpayUnsupportedMethodException extends UnexpectedValueException implements UnitpayExceptionInterface
 {
 }
 
-/** A caller supplied an invalid or missing argument (bad param, missing secret, malformed input). */
+/** Передан некорректный или отсутствующий аргумент (неверный параметр, нет ключа, некорректные данные). */
 class UnitpayValidationException extends InvalidArgumentException implements UnitpayExceptionInterface
 {
 }
 
 /**
- * Value object for paid goods
+ * Неизменяемый объект-значение одной позиции фискального чека (54-ФЗ).
  */
 final class CashItem
 {
@@ -121,8 +122,6 @@ final class CashItem
     /** Товар, подлежащий маркировке, с кодом маркировки */
     public const PAYMENT_OBJECT_COMMODITY_MARK = 'commodity_mark';
 
-    // Отклоняются текущим публичным API. Оставлены ради обратной совместимости
-    // и будут удалены в 3.0 — не используйте в новом коде.
     /** @deprecated Отклоняется публичным API; будет удалено в 3.0. */
     public const PAYMENT_OBJECT_EXCISE = 'excise';
     /** @deprecated Отклоняется публичным API; будет удалено в 3.0. */
@@ -208,9 +207,16 @@ final class CashItem
     private $postText;
 
     /**
+     * $count и $price проверяются через is_numeric() ДО проверки диапазона: в PHP 8
+     * сравнение нечисловой строки с числом ("abc" <= 0) выполняется как сравнение
+     * строк и даёт false, поэтому непроверенное значение прошло бы как корректное.
+     * $count сохраняется как есть (int или float): дробные количества допустимы для
+     * весовых/объёмных товаров (MEASURE_KG/G/L, ...), а бэкенд округляет количество до
+     * 3 знаков, поэтому приведение к int тихо испортило бы чек.
+     *
      * @param string $name
-     * @param int|float|string $count positive quantity (fractional allowed for weight/volume)
-     * @param float|int|string $price non-negative price per unit
+     * @param int|float|string $count положительное количество (дробное допустимо для веса/объёма)
+     * @param float|int|string $price неотрицательная цена за единицу
      * @param string $nds
      * @param string $type
      * @param string $paymentMethod
@@ -223,8 +229,6 @@ final class CashItem
         $type = self::PAYMENT_OBJECT_COMMODITY,
         $paymentMethod = self::PAYMENT_METHOD_PREPAYMENT_FULL
     ) {
-        // is_numeric first: on PHP 8 "abc" < 1 is a string comparison that yields
-        // false, so a non-numeric value would otherwise slip past the range check.
         if (!is_numeric($count) || $count <= 0) {
             throw new UnitpayValidationException('CashItem count must be a positive number');
         }
@@ -232,9 +236,6 @@ final class CashItem
             throw new UnitpayValidationException('CashItem price must be a non-negative number');
         }
         $this->name = $name;
-        // Keep the numeric value as-is (int or float): fractional quantities are valid
-        // for weight/volume goods (MEASURE_KG/G/L, ...) and the backend rounds count to
-        // 3 decimals, so truncating to int would silently corrupt the receipt.
         $this->count = $count + 0;
         $this->price = (float) $price;
         $this->nds = $nds;
@@ -456,15 +457,16 @@ final class CashItem
 }
 
 /**
- * IP allowlist matcher: exact addresses and CIDR subnets (IPv4 and IPv6).
- * Extracted from UnitPay so the range-matching logic stays cohesive and testable.
+ * Проверяет, входит ли IP в белый список: точные адреса и CIDR-подсети
+ * (IPv4 и IPv6). Вынесен из UnitPay в отдельный класс, чтобы логика
+ * сопоставления диапазонов оставалась связной и тестируемой.
  */
 final class UnitpayIpAllowlist
 {
     private $entries;
 
     /**
-     * @param string[] $entries exact IPs and/or CIDR ranges (e.g. "77.75.153.0/25")
+     * @param string[] $entries точные IP и/или CIDR-диапазоны (например, "77.75.153.0/25")
      */
     public function __construct(array $entries)
     {
@@ -477,12 +479,19 @@ final class UnitpayIpAllowlist
      */
     public function contains($ip)
     {
-        // Convert the client IP to its packed form once, not once per CIDR entry.
         $ipBin = $this->toBinary($ip);
         foreach ($this->entries as $entry) {
             if (strpos($entry, '/') === false) {
                 if ($entry === $ip) {
                     return true;
+                }
+                // Нормализованное сравнение: один и тот же адрес в разной записи
+                // (регистр/сжатие IPv6) даёт одинаковый упакованный in_addr.
+                if ($ipBin !== null) {
+                    $entryBin = $this->toBinary($entry);
+                    if ($entryBin !== null && $entryBin === $ipBin) {
+                        return true;
+                    }
                 }
                 continue;
             }
@@ -495,13 +504,11 @@ final class UnitpayIpAllowlist
 
     /**
      * @param string $cidr
-     * @param string $ipBin packed in_addr of the client IP (from toBinary())
+     * @param string $ipBin упакованный in_addr клиентского IP (из toBinary())
      * @return bool
      */
     private function cidrContains($cidr, $ipBin)
     {
-        // Only entries containing '/' reach this method, so explode() always yields
-        // exactly two elements — no array_pad default is needed.
         list($subnet, $bits) = explode('/', $cidr, 2);
         if (!ctype_digit($bits)) {
             return false;
@@ -514,9 +521,10 @@ final class UnitpayIpAllowlist
     }
 
     /**
-     * Whether $entry is a well-formed allowlist entry: an exact IPv4/IPv6 address
-     * or an "address/bits" CIDR range. Used to validate a fetched IP feed before
-     * it replaces the built-in list, so malformed JSON cannot empty the allowlist.
+     * Является ли $entry корректной записью белого списка: точным адресом IPv4/IPv6
+     * или CIDR-диапазоном вида "адрес/биты". Используется для проверки загруженного
+     * списка IP до того, как он заменит встроенный, чтобы некорректный JSON не мог
+     * опустошить белый список.
      * @param string $entry
      * @return bool
      */
@@ -526,14 +534,21 @@ final class UnitpayIpAllowlist
             return filter_var($entry, FILTER_VALIDATE_IP) !== false;
         }
         list($subnet, $bits) = explode('/', $entry, 2);
-        return ctype_digit($bits) && filter_var($subnet, FILTER_VALIDATE_IP) !== false;
+        if (!ctype_digit($bits) || filter_var($subnet, FILTER_VALIDATE_IP) === false) {
+            return false;
+        }
+        // Длина префикса не может превышать разрядность адреса (IPv4 = 32, IPv6 = 128),
+        // иначе запись валидна на вид, но не матчит ничего (prefixMatches вернёт false).
+        $maxBits = filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? 128 : 32;
+        return (int) $bits <= $maxBits;
     }
 
     /**
-     * Parse the published webhook IP feed body ({"webhooks":[...]}) into a
-     * validated, de-duplicated list of allowlist entries. Returns null on empty
-     * input, malformed JSON, a missing or non-array "webhooks" key, or when no
-     * entry is a well-formed IP/CIDR — so a bad feed can never empty the allowlist.
+     * Разбирает тело опубликованного перечня IP вебхуков ({"webhooks":[...]}) в
+     * проверенный список записей без дубликатов. Возвращает null при пустом вводе,
+     * некорректном JSON, отсутствующем или не-массивном ключе "webhooks" либо когда
+     * ни одна запись не является корректным IP/CIDR — так плохой перечень не может
+     * опустошить белый список.
      * @param string $body
      * @return string[]|null
      */
@@ -557,7 +572,7 @@ final class UnitpayIpAllowlist
 
     /**
      * @param string $ip
-     * @return string|null packed in_addr, or null when $ip is not a valid address
+     * @return string|null упакованный in_addr, либо null, если $ip не является корректным адресом
      */
     private function toBinary($ip)
     {
@@ -593,16 +608,19 @@ final class UnitpayIpAllowlist
 }
 
 /**
- * Payment method Unitpay process
+ * Клиент платёжного REST API Unitpay: подпись и построение формы/URL,
+ * server-to-server вызовы API и проверка входящих вебхуков.
  */
 class UnitPay
 {
-    // Коды способов оплаты для параметра `paymentType` в api('initPayment', ...)
-    // и выплатах api('massPayment', ...). Источник истины — бэкенд; список кодов:
-    // https://help.unitpay.ru/book-of-reference/payment-system-codes
-    // paymentType здесь НЕ валидируется по этим значениям (как и словари CashItem),
-    // поэтому новый код оплаты не требует релиза SDK — константы дают лишь
-    // защиту от опечаток и автодополнение.
+    /**
+     * Коды способов оплаты для параметра `paymentType` в api('initPayment', ...)
+     * и выплатах api('massPayment', ...). Источник истины — бэкенд, список кодов:
+     * https://help.unitpay.ru/book-of-reference/payment-system-codes
+     * paymentType по этим значениям НЕ валидируется (как и словари CashItem), поэтому
+     * новый код оплаты не требует релиза SDK — константы дают лишь защиту от опечаток
+     * и автодополнение.
+     */
     /** Пластиковые карты (приём по картам всего мира) */
     public const PAYMENT_TYPE_CARD = 'card';
     /** Зарубежные карты через форму банка-эквайера */
@@ -618,8 +636,10 @@ class UnitPay
     /** WebMoney (WMZ-кошельки) */
     public const PAYMENT_TYPE_WEBMONEY = 'webmoney';
 
-    // The supported api() methods are exactly the keys of this map; secretKey is
-    // injected and validated by api(), so it is not listed among the required params.
+    /**
+     * Поддерживаемые методы api() и их обязательные параметры. secretKey
+     * подставляется и проверяется в api(), поэтому здесь не перечислен.
+     */
     private $requiredUnitpayMethodsParams = [
         'initPayment'         => ['account', 'sum', 'projectId', 'paymentType'],
         'getPayment'          => ['paymentId'],
@@ -641,13 +661,18 @@ class UnitPay
         'getSbpBankList'             => ['login'],
         'getBinInfo'                 => ['login', 'bin'],
     ];
-    // Webhook methods Unitpay sends to the handler. 'preauth' is the two-stage
-    // hold notification (funds blocked, not yet captured) — see payment-handler
-    // docs; it must verify like the others, not be rejected as unsupported.
+    /**
+     * Методы вебхуков, которые Unitpay шлёт обработчику. 'preauth' — уведомление о
+     * двухстадийной блокировке средств (деньги заблокированы, но ещё не списаны):
+     * должно проходить проверку как остальные, а не отклоняться как неподдерживаемое.
+     */
     private $supportedPartnerMethods = ['check', 'pay', 'preauth', 'error'];
-    // Unitpay's published outbound IPs. 127.0.0.1 is deliberately NOT here: behind a
-    // same-host reverse proxy REMOTE_ADDR is 127.0.0.1, which would make the IP gate a
-    // no-op. Add it explicitly via setAllowedIps() for local debugging only.
+    /**
+     * Опубликованные исходящие IP Unitpay. 127.0.0.1 здесь намеренно НЕТ: за
+     * обратным прокси на том же хосте REMOTE_ADDR равен 127.0.0.1, что превратило бы
+     * проверку IP в фикцию. Добавляйте его явно через setAllowedIps() только для
+     * локальной отладки.
+     */
     private $supportedUnitpayIp = [
         '31.186.100.49',
         '51.250.20.9',
@@ -663,20 +688,22 @@ class UnitPay
     private $handlerMethod;
     private $handlerParams;
     private $ipAllowlist;
-    // Merchant-specific IPs added via addAllowedIps(), always applied on top of the
-    // Unitpay list and preserved across refreshAllowedIps()/setAllowedIps().
+    /**
+     * IP самого мерчанта, добавленные через addAllowedIps(); всегда применяются
+     * поверх списка Unitpay и сохраняются при refreshAllowedIps()/setAllowedIps().
+     */
     private $customIps = [];
     private $ipsUrl;
 
     /**
-     * @param string $domain Host only, e.g. "unitpay.ru" — no scheme or path (it becomes "https://$domain/api").
+     * @param string $domain только хост, например "unitpay.ru" — без схемы и пути (станет "https://$domain/api").
      * @param string|null $secretKey
-     * @param callable|null $transport Outbound HTTP transport used by api(): fn(string $url): string|false.
-     *                                 Defaults to file_get_contents(). Inject to test api() without the network.
-     * @param array|null $request      Inbound webhook request array read by checkHandlerRequest().
-     *                                 Defaults to $_GET. Inject to test the handler without superglobals.
-     * @param string|null $clientIp    Source IP used by getIp(). Defaults to $_SERVER['REMOTE_ADDR'].
-     *                                 Inject to test the IP allowlist without superglobals.
+     * @param callable|null $transport исходящий HTTP-транспорт для api(): fn(string $url): string|false.
+     *                                 По умолчанию file_get_contents(). Подменяйте, чтобы тестировать api() без сети.
+     * @param array|null $request      массив входящего вебхука, читаемый checkHandlerRequest().
+     *                                 По умолчанию $_GET. Подменяйте, чтобы тестировать обработчик без суперглобальных переменных.
+     * @param string|null $clientIp    IP отправителя, используемый getIp(). По умолчанию $_SERVER['REMOTE_ADDR'].
+     *                                 Подменяйте, чтобы тестировать белый список IP без суперглобальных переменных.
      */
     public function __construct($domain, $secretKey = null, ?callable $transport = null, ?array $request = null, ?string $clientIp = null)
     {
@@ -690,11 +717,12 @@ class UnitPay
     }
 
     /**
-     * Override the Unitpay IP addresses allowed to call the handler. Replaces the
-     * built-in default (or a previously fetched list) entirely, but does NOT touch
-     * the merchant IPs added via addAllowedIps(), which stay applied on top. Use it
-     * to keep the SDK in sync when the Unitpay infrastructure changes without
-     * waiting for a release, or to feed back a list you fetched and cached yourself.
+     * Переопределяет список IP Unitpay, которым разрешено вызывать обработчик.
+     * Полностью заменяет встроенный список по умолчанию (или ранее загруженный), но
+     * НЕ трогает IP мерчанта, добавленные через addAllowedIps(), — они остаются
+     * поверх. Используйте, чтобы держать SDK в актуальном состоянии при смене
+     * инфраструктуры Unitpay, не дожидаясь релиза, или чтобы вернуть список, который
+     * вы загрузили и закэшировали сами.
      * @link https://help.unitpay.ru/book-of-reference/ip-addresses
      * @param string[] $ips
      * @return $this
@@ -702,41 +730,44 @@ class UnitPay
     public function setAllowedIps(array $ips)
     {
         $this->supportedUnitpayIp = $ips;
-        $this->ipAllowlist = null; // rebuild the matcher lazily on the next check
+        $this->ipAllowlist = null;
         return $this;
     }
 
     /**
-     * Add merchant-specific IPs/CIDR ranges (e.g. your own proxy/relay) on top of
-     * the Unitpay list. Unlike setAllowedIps(), which replaces the Unitpay list,
-     * these persist across refreshAllowedIps()/setAllowedIps() calls. De-duplicated.
-     * @param string[] $ips exact IPs and/or CIDR ranges
+     * Добавляет IP/CIDR-диапазоны самого мерчанта (например, ваш прокси/релей)
+     * поверх списка Unitpay. В отличие от setAllowedIps(), который заменяет список
+     * Unitpay, эти сохраняются при вызовах refreshAllowedIps()/setAllowedIps().
+     * Дубликаты убираются.
+     * @param string[] $ips точные IP и/или CIDR-диапазоны
      * @return $this
      */
     public function addAllowedIps(array $ips)
     {
         $this->customIps = array_values(array_unique(array_merge($this->customIps, $ips)));
-        $this->ipAllowlist = null; // rebuild the matcher lazily on the next check
+        $this->ipAllowlist = null;
         return $this;
     }
 
     /**
-     * Fetch Unitpay's currently published webhook IPs from
-     * https://<domain>/ips/ips_webhooks.json and use them as the allowlist.
+     * Загружает актуальные опубликованные IP вебхуков Unitpay с
+     * https://<domain>/ips/ips_webhooks.json и делает их белым списком.
      *
-     * Best-effort and fail-safe: on any transport/parse/validation failure the
-     * previously configured Unitpay list (the built-in default, or whatever
-     * setAllowedIps() last set) is kept unchanged — this never empties the list
-     * and never throws, so it is safe to chain before checkHandlerRequest(). A
-     * successful fetch REPLACES the Unitpay list (so a decommissioned IP drops
-     * out); merchant IPs added via addAllowedIps() are preserved and always apply
-     * on top.
+     * Действует по возможности и безопасно для сбоев: при любой ошибке
+     * транспорта/разбора/проверки ранее настроенный список Unitpay (встроенный по
+     * умолчанию или заданный последним setAllowedIps()) остаётся без изменений —
+     * метод никогда не опустошает список и не бросает исключений, поэтому его
+     * безопасно вызывать в цепочке перед checkHandlerRequest(). Успешная загрузка
+     * ЗАМЕНЯЕТ список Unitpay (так выведенный из эксплуатации IP исчезает); IP
+     * мерчанта, добавленные через addAllowedIps(), сохраняются и всегда применяются
+     * поверх.
      *
-     * Verified TLS matters here (httpGet keeps CURLOPT_SSL_VERIFYPEER / verify_peer
-     * on): an unverified or spoofed list would defeat the IP gate.
+     * Проверка TLS здесь важна (httpGet оставляет CURLOPT_SSL_VERIFYPEER / verify_peer
+     * включёнными): непроверенный или подменённый список свёл бы на нет проверку IP.
      *
-     * This makes a blocking network request — call it periodically (e.g. a daily
-     * cron) and cache getAllowedIps() on your side; do NOT call it on every webhook.
+     * Метод делает блокирующий сетевой запрос — вызывайте его периодически (например,
+     * ежедневным cron) и кэшируйте getAllowedIps() у себя; НЕ вызывайте его на каждый
+     * вебхук.
      * @return $this
      */
     public function refreshAllowedIps()
@@ -744,16 +775,16 @@ class UnitPay
         $ips = $this->fetchUnitpayIps();
         if ($ips !== null) {
             $this->supportedUnitpayIp = $ips;
-            $this->ipAllowlist = null; // rebuild the matcher lazily on the next check
+            $this->ipAllowlist = null;
         }
         return $this;
     }
 
     /**
-     * Effective allowlist actually enforced by the handler: the Unitpay list plus
-     * the merchant additions, de-duplicated. Cache this after refreshAllowedIps()
-     * and feed it back via setAllowedIps() on webhook requests to avoid a network
-     * call per callback.
+     * Итоговый белый список, реально применяемый обработчиком: список Unitpay плюс
+     * добавления мерчанта, без дубликатов. Кэшируйте его после refreshAllowedIps() и
+     * возвращайте через setAllowedIps() при обработке вебхуков, чтобы не делать
+     * сетевой запрос на каждый вызов.
      * @return string[]
      */
     public function getAllowedIps()
@@ -762,8 +793,8 @@ class UnitPay
     }
 
     /**
-     * Load and validate the published webhook IP feed.
-     * @return string[]|null validated non-empty list, or null on any failure
+     * Загружает и проверяет опубликованный фид IP вебхуков.
+     * @return string[]|null проверенный непустой список либо null при любой ошибке
      */
     private function fetchUnitpayIps()
     {
@@ -772,18 +803,25 @@ class UnitPay
     }
 
     /**
-     * Create SHA-256 digital signature
+     * Строит подпись SHA-256: значения параметров, отсортированные ksort и
+     * объединённые буквальным разделителем "{up}", с $method в начале и secretKey в
+     * конце.
+     *
+     * Безопасность: unset() убирает переданные вызывающим ключи подписи И индекс
+     * PHP_INT_MAX — подделанный params[PHP_INT_MAX] превратил бы добавление secretKey
+     * в пустую операцию, выкинув секрет из хэша и сделав подпись подделываемой (обход
+     * на PHP <8, фатальная Error/DoS на PHP >=8). НЕ убирайте этот unset — защита
+     * однажды была потеряна в 7835fb4 и восстановлена. Подделанный вебхук может также
+     * подсунуть значение-массив (например, params[x][]=1), поэтому нескаляры
+     * приводятся к '' — implode() не выдаёт предупреждение, а проверка всё равно
+     * проваливается, потому что секрет добавляется в любом случае.
+     *
      * @param array $params
      * @param string|null $method
      * @return string
      */
     public function getSignature(array $params, $method = null)
     {
-        // Strip caller-supplied signature keys and guard the auto-append index:
-        // a crafted params[PHP_INT_MAX] would make the secretKey append below a
-        // silent no-op, dropping the secret from the hash and making the
-        // signature forgeable (bypass on PHP <8, fatal Error/DoS on PHP >=8).
-        // Do NOT remove these unsets — regression previously introduced in 7835fb4.
         unset($params['sign'], $params['signature'], $params[PHP_INT_MAX]);
         ksort($params);
         $params[] = $this->secretKey;
@@ -792,9 +830,6 @@ class UnitPay
             array_unshift($params, $method);
         }
 
-        // A crafted webhook can inject an array value (e.g. params[x][]=1); coerce
-        // non-scalars to '' so implode() cannot emit an "Array to string conversion"
-        // warning. The check still fails closed — the secret is appended regardless.
         $params = array_map(static function ($value) {
             if (is_float($value)) {
                 return self::floatToString($value);
@@ -806,18 +841,18 @@ class UnitPay
     }
 
     /**
-     * Return IP address
+     * IP отправителя входящего запроса (подменённый clientIp либо $_SERVER['REMOTE_ADDR']).
      * @return string
      */
     protected function getIp()
     {
-        return $this->clientIp !== null ? $this->clientIp : $_SERVER['REMOTE_ADDR'];
+        return $this->clientIp !== null ? $this->clientIp : ($_SERVER['REMOTE_ADDR'] ?? '');
     }
 
     /**
-     * Whether $ip may call the handler. Matches exact addresses and CIDR subnets
-     * (IPv4/IPv6) via UnitpayIpAllowlist, so setAllowedIps(['77.75.153.0/25'])
-     * works (F024). Override for proxy-aware logic.
+     * Разрешено ли $ip вызывать обработчик. Сопоставляет точные адреса и CIDR-подсети
+     * (IPv4/IPv6) через UnitpayIpAllowlist, поэтому setAllowedIps(['77.75.153.0/25'])
+     * работает. Переопределите для логики, учитывающей прокси.
      * @param string $ip
      * @return bool
      */
@@ -832,11 +867,17 @@ class UnitPay
     }
 
     /**
-     * Perform the outbound HTTP GET used by api().
-     * Resolution order: injected $transport -> cURL (if ext-curl present) -> file_get_contents.
-     * cURL adds connect/read timeouts and does not require allow_url_fopen; both fallbacks
-     * carry a timeout too. Returns the response body, or false on a transport failure
-     * (which api() turns into a "Temporary server error").
+     * Выполняет исходящий HTTP GET, используемый api().
+     * Порядок выбора: подменённый $transport -> cURL (если есть ext-curl) -> file_get_contents.
+     * cURL добавляет таймауты соединения/чтения и не требует allow_url_fopen; у обоих
+     * запасных вариантов таймаут тоже есть. Возвращает тело ответа либо false при
+     * ошибке транспорта (которую api() превращает в "Temporary server error").
+     *
+     * Безопасность: проверка TLS остаётся включённой (cURL сохраняет
+     * CURLOPT_SSL_VERIFYPEER в значении по умолчанию true). Запасной вариант
+     * file_get_contents гасит своё предупреждение транспорта через set_error_handler,
+     * а не оператором '@' (который запрещён правилами QA) — иначе это предупреждение
+     * записало бы в лог URL с секретом.
      * @param string $url
      * @return string|false
      */
@@ -852,14 +893,8 @@ class UnitPay
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_CONNECTTIMEOUT => 5,
                 CURLOPT_TIMEOUT        => 10,
-                // CURLOPT_SSL_VERIFYPEER defaults to true — TLS verification stays on.
             ]);
             $body = curl_exec($ch);
-            // On PHP >=8.0 curl_close() is a deprecated no-op (the handle is a
-            // CurlHandle object freed by GC), so skip it to avoid the E_DEPRECATED
-            // notice on 8.5. On PHP <8.0 the handle is a resource — close it
-            // explicitly for deterministic cleanup (though refcounting would also
-            // free it when $ch leaves scope on return).
             if (\PHP_VERSION_ID < 80000) {
                 curl_close($ch);
             }
@@ -867,8 +902,6 @@ class UnitPay
         }
 
         $context = stream_context_create(['http' => ['timeout' => 10]]);
-        // Swallow the transport warning without the '@' operator (the QA ruleset forbids
-        // it): that warning would otherwise embed the secret-bearing URL in the error log.
         set_error_handler(static function () {
             return true;
         });
@@ -880,7 +913,10 @@ class UnitPay
     }
 
     /**
-     * Get URL for pay through the form
+     * Строит URL-переход на размещённую у Unitpay платёжную форму. Параметры,
+     * заданные fluent-сеттерами (setCashItems/setCustomerEmail/setBackUrl/...),
+     * подмешиваются и затем очищаются, поэтому повторно используемый экземпляр не
+     * переносит параметры этого вызова в следующий form()/api().
      * @param string $publicKey
      * @param string|float|int $sum
      * @param string $account
@@ -900,9 +936,6 @@ class UnitPay
             'desc'     => $desc,
             'sum'      => $sum,
         ]);
-        // Build the URL from a local array and consume the fluent-setter params: a
-        // reused instance must not carry this call's params (or form()'s vital params
-        // and signature) into the next form()/api() call.
         $params = array_merge($this->params, $vitalParams);
         $params['signature'] = $this->getSignature($vitalParams);
         $params['locale'] = $locale;
@@ -911,7 +944,7 @@ class UnitPay
     }
 
     /**
-     * Set customer email
+     * Задаёт email покупателя.
      * @param string $email
      * @return $this
      */
@@ -922,7 +955,7 @@ class UnitPay
     }
 
     /**
-     * Set customer phone number
+     * Задаёт телефон покупателя.
      * @param string $phone
      * @return $this
      */
@@ -933,7 +966,10 @@ class UnitPay
     }
 
     /**
-     * Set list of paid goods
+     * Прикрепляет фискальный чек (позиции по 54-ФЗ) к следующему вызову form()/api().
+     * Необязательные поля CashItem сериализуются только если заданы. Бросает
+     * исключение вместо отправки пустого чека, если json_encode не удался (например,
+     * имя не в UTF-8 / в Windows-1251).
      * @param CashItem[] $items
      * @return $this
      */
@@ -950,7 +986,6 @@ class UnitPay
                 'paymentMethod' => $item->getPaymentMethod(),
             ];
 
-            // Optional fields: serialize only the ones that were actually set.
             $optional = [
                 'sum'              => $item->getSum(),
                 'currency'         => $item->getCurrency(),
@@ -972,7 +1007,6 @@ class UnitPay
 
         $json = json_encode($cashItems);
         if ($json === false) {
-            // e.g. a non-UTF-8 (Windows-1251) product name — never ship an empty receipt.
             throw new UnitpayValidationException('Failed to encode cashItems: ' . json_last_error_msg());
         }
         $this->params['cashItems'] = base64_encode($json);
@@ -981,7 +1015,7 @@ class UnitPay
     }
 
     /**
-     * Set callback URL
+     * Задаёт URL, на который Unitpay вернёт плательщика после оплаты.
      * @param string $backUrl
      * @return $this
      */
@@ -992,7 +1026,15 @@ class UnitPay
     }
 
     /**
-     * Call API
+     * Выполняет server-to-server вызов REST API Unitpay. Параметры fluent-сеттеров
+     * подмешиваются (чтобы setCashItems()->api('initPayment', ...) отправлял чек) и
+     * очищаются только УСПЕШНЫМ вызовом. Сбой транспорта их сохраняет, чтобы повтор
+     * ушёл с тем же чеком, — поэтому чистое состояние наступает лишь после успеха:
+     * несвязанный вызов сразу ПОСЛЕ сбоя унаследует накопленные параметры (сбросьте их
+     * явно или используйте новый экземпляр, если это нежелательно). Явные $params имеют
+     * приоритет. Явный непустой secretKey в $params переопределяет ключ экземпляра,
+     * поэтому методы уровня аккаунта (getPartner, getCommissions, выплаты, ...) могут
+     * использовать ключ аккаунта.
      * @param string $method
      * @param array $params
      * @return object
@@ -1006,12 +1048,6 @@ class UnitPay
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 
-        // Fold in the fluent-setter params (setCashItems/setCustomerEmail/…) so
-        // setCashItems()->api('initPayment', ...) sends the receipt. Only the setters
-        // write to $this->params — form() builds its URL locally — so folding the whole
-        // bucket is safe and no new setter can be silently dropped. Explicit $params win.
-        // The bucket is consumed on success (below) so a reused instance never bleeds
-        // one call's params into an unrelated next call.
         $params = array_merge($this->params, $params);
 
         foreach ($this->requiredUnitpayMethodsParams[$method] as $rParam) {
@@ -1020,9 +1056,6 @@ class UnitPay
             }
         }
 
-        // The instance key is the default; an explicit NON-EMPTY secretKey in $params wins
-        // so account-level methods (getPartner, getCommissions, payouts, ...) can use the
-        // account key. A falsy value (e.g. an unset getenv()) falls back to the instance key.
         if (empty($params['secretKey'])) {
             $params['secretKey'] = $this->secretKey;
         }
@@ -1032,7 +1065,6 @@ class UnitPay
 
         $params = self::stringifyFloats($params);
 
-        // Union (+) keeps 'method' authoritative if a param key collides with it.
         $requestUrl = $this->apiUrl . '?' . http_build_query(
             ['method' => $method] + $params,
             '',
@@ -1045,15 +1077,16 @@ class UnitPay
             throw new UnitpayTransportException('Temporary server error. Please try again later.');
         }
 
-        // Consume the fluent-setter params only after a fully successful call, so a
-        // failed or retried call keeps them, but the next unrelated call starts clean.
         $this->params = [];
 
         return $response;
     }
 
     /**
-     * Check request on handler from Unitpay
+     * Проверяет входящий вебхук: поддерживаемый метод, подпись SHA-256 (в постоянное
+     * время) и белый список IP отправителя. При успехе выставляет проверенные метод и
+     * параметры, доступные через getHandlerMethod()/getHandlerParams() (учитывая
+     * подменённый запрос, а не $_GET).
      * @return bool
      *
      * @throws InvalidArgumentException
@@ -1087,16 +1120,10 @@ class UnitPay
             throw new UnitpaySignatureException('Wrong signature');
         }
 
-        /**
-         * IP address check
-         * @link https://help.unitpay.ru/book-of-reference/ip-addresses
-         */
         if (!$this->isAllowedIp($ip)) {
             throw new UnitpayIpException('IP address Error');
         }
 
-        // Expose the validated method/params so consumers read them from here
-        // (works with an injected $request) instead of re-reading $_GET.
         $this->handlerMethod = $method;
         $this->handlerParams = $params;
 
@@ -1104,9 +1131,9 @@ class UnitPay
     }
 
     /**
-     * Webhook method validated by the last successful checkHandlerRequest()
-     * ('check' | 'pay' | 'error'). Read this instead of $_GET so an injected
-     * request is honoured. Null before a successful validation.
+     * Метод вебхука, проверенный последним успешным checkHandlerRequest()
+     * ('check' | 'pay' | 'preauth' | 'error'). Читайте его вместо $_GET, чтобы
+     * учитывался подменённый запрос. До успешной проверки — null.
      * @return string|null
      */
     public function getHandlerMethod()
@@ -1115,8 +1142,8 @@ class UnitPay
     }
 
     /**
-     * Webhook params validated by the last successful checkHandlerRequest().
-     * Null before a successful validation.
+     * Параметры вебхука, проверенные последним успешным checkHandlerRequest().
+     * До успешной проверки — null.
      * @return array|null
      */
     public function getHandlerParams()
@@ -1125,9 +1152,9 @@ class UnitPay
     }
 
     /**
-     * Render float params as locale-independent decimal strings so the signature
-     * and the request URL stay identical on PHP <8.0 (where (string)$float honours
-     * LC_NUMERIC and would emit "100,5" in comma-decimal locales). Non-floats pass through.
+     * Приводит float-параметры к локале-независимым десятичным строкам, чтобы подпись
+     * и URL запроса совпадали на PHP <8.0 (где (string)$float учитывает LC_NUMERIC и в
+     * локалях с запятой выдал бы "100,5"). Значения, не являющиеся float, проходят как есть.
      * @param array $params
      * @return array
      */
@@ -1143,10 +1170,10 @@ class UnitPay
     }
 
     /**
-     * Render a float as a locale-independent decimal string with no trailing zeros.
-     * (string) $float honours LC_NUMERIC on PHP <8.0 and would emit "100,5" in
-     * comma-decimal locales, breaking signature/URL consistency. Shared by
-     * getSignature() and stringifyFloats() so both sign and transmit the same form.
+     * Приводит float к локале-независимой десятичной строке без хвостовых нулей.
+     * (string) $float учитывает LC_NUMERIC на PHP <8.0 и в локалях с запятой выдал бы
+     * "100,5", ломая совпадение подписи и URL. Используется совместно getSignature() и
+     * stringifyFloats(), чтобы подпись и передаваемое значение имели одинаковый вид.
      * @param float $value
      * @return string
      */
@@ -1156,7 +1183,7 @@ class UnitPay
     }
 
     /**
-     * Response for Unitpay if handle success
+     * Строит JSON-ответ об успехе, который Unitpay ожидает от обработчика.
      * @param string $message
      * @return string
      */
@@ -1166,7 +1193,7 @@ class UnitPay
     }
 
     /**
-     * Response for Unitpay if handle error
+     * Строит JSON-ответ об ошибке, который Unitpay ожидает от обработчика.
      * @param string $message
      * @return string
      */

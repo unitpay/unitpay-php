@@ -6,9 +6,9 @@ use PHPUnit\Framework\TestCase;
 use UnitPay;
 
 /**
- * The PAYMENT_TYPE_* constants must stay in sync with Unitpay's published
- * payment-system codes: https://help.unitpay.ru/book-of-reference/payment-system-codes
- * The deprecated codes (qiwi, yandex, mc, alfaClick) are intentionally absent.
+ * Константы PAYMENT_TYPE_* должны оставаться в синхронизации с опубликованными кодами
+ * способов оплаты Unitpay: https://help.unitpay.ru/book-of-reference/payment-system-codes
+ * Устаревшие коды (qiwi, yandex, mc, alfaClick) намеренно отсутствуют.
  */
 final class UnitPayPaymentTypeTest extends TestCase
 {
@@ -23,7 +23,7 @@ final class UnitPayPaymentTypeTest extends TestCase
         $this->assertSame('webmoney', UnitPay::PAYMENT_TYPE_WEBMONEY);
     }
 
-    /** A payment type constant is accepted verbatim as the initPayment paymentType. */
+    /** Константа способа оплаты принимается как есть в качестве paymentType для initPayment. */
     public function testConstantIsUsableAsInitPaymentType()
     {
         $captured = null;

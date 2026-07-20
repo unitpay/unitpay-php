@@ -13,10 +13,10 @@ final class UnitPayHandlerTest extends TestCase
     public const ALLOWED_IP = '31.186.100.49';
 
     /**
-     * Build a webhook request array with a valid signature over its params.
+     * Строит массив вебхука с корректной подписью его параметров.
      *
      * @param string $method
-     * @param array  $overrides params to add/override before signing
+     * @param array  $overrides параметры для добавления/переопределения перед подписью
      * @return array{method: string, params: array}
      */
     private function validRequest($method = 'pay', array $overrides = [])
@@ -53,7 +53,7 @@ final class UnitPayHandlerTest extends TestCase
     public function testTamperedParamsAreRejected()
     {
         $request = $this->validRequest('pay');
-        $request['params']['orderSum'] = '0.01'; // changed after signing
+        $request['params']['orderSum'] = '0.01'; // изменено после подписи
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Wrong signature');
@@ -96,9 +96,9 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /**
-     * A two-stage (preauth) hold notification is a valid webhook method Unitpay
-     * sends (method = check | pay | preauth | error). It must pass verification,
-     * not be rejected as unsupported.
+     * Уведомление о двухстадийной блокировке (preauth) — валидный метод вебхука,
+     * который шлёт Unitpay (method = check | pay | preauth | error). Должно проходить
+     * проверку, а не отклоняться как неподдерживаемое.
      */
     public function testPreauthPartnerMethodIsSupported()
     {
@@ -111,8 +111,8 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /**
-     * F002: a non-string signature (e.g. an array injected via $_GET) must be
-     * rejected cleanly as "Wrong signature", not blow up with a TypeError.
+     * Нестроковая подпись (например, массив, подсунутый через $_GET) должна быть
+     * аккуратно отклонена как "Wrong signature", а не приводить к TypeError.
      */
     public function testArraySignatureIsRejectedCleanly()
     {
@@ -125,8 +125,8 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /**
-     * F001: a crafted params[PHP_INT_MAX] must not crash verification and must
-     * still verify correctly (the key is stripped on both signing and checking).
+     * Подделанный params[PHP_INT_MAX] не должен ломать проверку и должен проходить
+     * её корректно (ключ убирается и при подписи, и при проверке).
      */
     public function testPhpIntMaxKeyInParamsDoesNotBreakVerification()
     {
@@ -145,14 +145,14 @@ final class UnitPayHandlerTest extends TestCase
 
     public function testSetAllowedIpsOverridesTheDefaultAllowlist()
     {
-        $customIp = '203.0.113.7'; // TEST-NET-3, not in the shipped default list
+        $customIp = '203.0.113.7'; // TEST-NET-3, нет в списке по умолчанию
         $unitPay = $this->handler($this->validRequest('pay'), $customIp);
         $unitPay->setAllowedIps([$customIp]);
 
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
 
-    /** 127.0.0.1 is NOT trusted by default: behind a same-host proxy it would neuter the IP gate. */
+    /** 127.0.0.1 по умолчанию НЕ доверенный: за прокси на том же хосте он обнулил бы проверку IP. */
     public function testLocalhostIsRejectedByDefault()
     {
         $unitPay = $this->handler($this->validRequest('pay'), '127.0.0.1');
@@ -161,7 +161,7 @@ final class UnitPayHandlerTest extends TestCase
         $unitPay->checkHandlerRequest();
     }
 
-    /** F024: setAllowedIps accepts CIDR subnets, not just exact IPs. */
+    /** setAllowedIps принимает CIDR-подсети, а не только точные IP. */
     public function testCidrAllowlistMatchesAddressInRange()
     {
         $unitPay = $this->handler($this->validRequest('pay'), '203.0.113.55');
@@ -179,7 +179,7 @@ final class UnitPayHandlerTest extends TestCase
         $unitPay->checkHandlerRequest();
     }
 
-    /** F024: CIDR matching also works for IPv6 (binary compare via inet_pton). */
+    /** Сопоставление CIDR работает и для IPv6 (бинарное сравнение через inet_pton). */
     public function testCidrAllowlistMatchesIpv6InRange()
     {
         $unitPay = $this->handler($this->validRequest('pay'), '2001:db8::1');
@@ -188,11 +188,11 @@ final class UnitPayHandlerTest extends TestCase
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
 
-    /** F009: typed exception that still extends the historical SPL type + marker interface. */
+    /** Типизированное исключение, всё ещё наследующее исторический SPL-тип + маркерный интерфейс. */
     public function testSignatureFailureThrowsTypedExceptionStillCatchableAsInvalidArgument()
     {
         $request = $this->validRequest('pay');
-        $request['params']['orderSum'] = '0.01'; // changed after signing
+        $request['params']['orderSum'] = '0.01'; // изменено после подписи
 
         try {
             $this->handler($request)->checkHandlerRequest();

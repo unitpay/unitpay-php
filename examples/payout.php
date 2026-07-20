@@ -3,9 +3,9 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Payouts (mass-payment). Account-level API: authenticates with the ACCOUNT key
- * + login, not the project key. The account key is passed explicitly in api()
- * params, overriding the project key from the constructor.
+ * Выплаты (mass-payment). API уровня аккаунта: аутентифицируется ключом АККАУНТА +
+ * login, а не ключом проекта. Ключ аккаунта передаётся явно в параметрах api() и
+ * переопределяет ключ проекта из конструктора.
  *
  * @link https://help.unitpay.ru/api/create_payout
  * @link https://help.unitpay.ru/api/payout_info
@@ -19,26 +19,26 @@ $unitpay = new UnitPay($domain, $secretKey);
 
 $account = ['login' => $login, 'secretKey' => $accountSecretKey];
 
-// SBP participant banks — memberId is required for SBP payouts:
+// Банки — участники СБП: memberId обязателен для выплат по СБП.
 $banks = $unitpay->api('getSbpBankList', $account);
 var_dump($banks->result ?? $banks->error ?? $banks);
 
-$transactionId = 'payout-1782'; // unique on your side
+$transactionId = 'payout-1782'; // уникальный на вашей стороне
 
-// Create a payout to an SBP recipient:
+// Создаём выплату получателю по СБП.
 $response = $unitpay->api('massPayment', $account + [
     'transactionId' => $transactionId,
     'sum'           => 100,
     'purse'         => '79510000071',
     'paymentType'   => 'sbp',
-    'memberId'      => '100000000004', // from getSbpBankList; SBP only
+    'memberId'      => '100000000004', // из getSbpBankList; только для СБП
 ]);
 
 if (isset($response->result)) {
     $payoutId = $response->result->payoutId;
     $status = $response->result->status; // success | not_completed
 
-    // Later — check the payout status by your transactionId:
+    // Позже — проверяем статус выплаты по вашему transactionId.
     $info = $unitpay->api('massPaymentStatus', $account + ['transactionId' => $transactionId]);
     var_dump($info->result ?? $info->error ?? $info);
 } elseif (isset($response->error->message)) {

@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 final class UnitPayCashItemsTest extends TestCase
 {
     /**
-     * setCashItems() stores base64(json(...)) in params; the only public way to
-     * read it back is through the form URL query, so decode it from there.
+     * setCashItems() хранит в params base64(json(...)); единственный публичный способ
+     * прочитать это обратно — через query формы, поэтому декодируем оттуда.
      *
      * @return array
      */

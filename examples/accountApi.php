@@ -3,10 +3,10 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Account-level reference calls: balance, commissions, currency rates, BIN info,
- * advance-offset receipt. They authenticate with the ACCOUNT key + login, passed
- * explicitly to override the project key from the constructor.
- * getMethodsAvailable is project-level and uses the project key (no login).
+ * Справочные вызовы уровня аккаунта: баланс, комиссии, курсы валют, информация по BIN,
+ * чек зачёта аванса. Аутентифицируются ключом АККАУНТА + login, переданными явно, чтобы
+ * переопределить ключ проекта из конструктора. getMethodsAvailable — уровня проекта и
+ * использует ключ проекта (без login).
  *
  * @link https://help.unitpay.ru/api/balance
  * @link https://help.unitpay.ru/api/commissions
@@ -21,20 +21,20 @@ $unitpay = new UnitPay($domain, $secretKey);
 
 $account = ['login' => $login, 'secretKey' => $accountSecretKey];
 
-// Account balance and amount available for payout:
+// Баланс аккаунта и сумма, доступная к выводу.
 var_dump($unitpay->api('getPartner', $account)->result ?? null);
 
-// Acquiring commissions for a project (account key + projectId):
+// Комиссии эквайринга по проекту (ключ аккаунта + projectId).
 var_dump($unitpay->api('getCommissions', $account + ['projectId' => $projectId])->result ?? null);
 
-// Currency conversion rates (in / out):
+// Курсы конвертации валют (вход / выход).
 var_dump($unitpay->api('getCurrencyCourses', $account)->result ?? null);
 
-// Card info by BIN (first 6 digits of the card number):
+// Информация о карте по BIN (первые 6 цифр номера карты).
 var_dump($unitpay->api('getBinInfo', $account + ['bin' => 424242])->result ?? null);
 
-// Advance-offset fiscal receipt for an earlier prepayment (creates a receipt):
+// Фискальный чек зачёта аванса по ранней предоплате (создаёт чек).
 var_dump($unitpay->api('offsetAdvance', $account + ['paymentId' => 3403575])->result ?? null);
 
-// Payment methods available on the project — project key, no login:
+// Доступные на проекте способы оплаты — ключ проекта, без login.
 var_dump($unitpay->api('getMethodsAvailable', ['projectId' => $projectId])->result ?? null);

@@ -82,7 +82,7 @@ final class UnitPayFormTest extends TestCase
         $this->assertArrayHasKey('cashItems', $q);
     }
 
-    /** The form signature must cover ONLY the four vital params, not the setter params. */
+    /** Подпись формы должна покрывать ТОЛЬКО четыре ключевых параметра, а не параметры сеттеров. */
     public function testFormSignatureExcludesSetterParams()
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');

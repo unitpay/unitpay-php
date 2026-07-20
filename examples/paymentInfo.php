@@ -3,7 +3,7 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Payment info
+ * Информация о платеже
  *
  * @link https://help.unitpay.ru/payments/payment-info
  */
@@ -17,12 +17,9 @@ $response = $unitpay->api('getPayment', [
     'paymentId' => 3403575
 ]);
 
-// If need user redirect on Payment Gate
 if (isset($response->result)) {
-    // Payment Info
     $paymentInfo = $response->result;
     var_dump($paymentInfo);
-    // If error during api request
 } elseif (isset($response->error->message)) {
     $error = $response->error->message;
     print 'Error: '.$error;
