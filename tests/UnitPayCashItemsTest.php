@@ -10,7 +10,7 @@ final class UnitPayCashItemsTest extends TestCase
 {
     /**
      * setCashItems() хранит в params base64(json(...)); единственный публичный способ
-     * прочитать это обратно — через query формы, поэтому декодируем оттуда.
+     * прочитать это обратно — через строку запроса формы, поэтому декодируем оттуда.
      *
      * @return array
      */
@@ -99,5 +99,18 @@ final class UnitPayCashItemsTest extends TestCase
         $this->assertCount(2, $items);
         $this->assertSame('A', $items[0]['name']);
         $this->assertSame('B', $items[1]['name']);
+    }
+
+    /**
+     * Имя не в UTF-8 (например, из Windows-1251) обрушивает json_encode; setCashItems()
+     * бросает исключение вместо тихой отправки пустого чека.
+     */
+    public function testSetCashItemsThrowsOnNonUtf8Name()
+    {
+        $unitPay = new UnitPay('unitpay.ru', 'secret');
+
+        $this->expectException(\UnitpayValidationException::class);
+        $this->expectExceptionMessage('Failed to encode cashItems');
+        $unitPay->setCashItems([new CashItem("\xB0Coffee", 1, 100.0)]);
     }
 }

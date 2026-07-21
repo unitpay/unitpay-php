@@ -56,7 +56,7 @@ final class UnitPayApiTest extends TestCase
 
         $unitPay->api('getPayment', ['paymentId' => 555]);
 
-        // Unitpay принимает плоские query-параметры с 05/2026 — без устаревшей вложенности params[...].
+        // Unitpay принимает плоские параметры строки запроса с 05/2026 — без устаревшей вложенности params[...].
         $this->assertStringContainsString('paymentId=555', $captured);
         $this->assertStringContainsString('secretKey=my-secret', $captured);
         $this->assertStringNotContainsString('params%5B', $captured);
@@ -169,6 +169,37 @@ final class UnitPayApiTest extends TestCase
         $this->assertStringContainsString('cashItems=', $urls[0]);
         $this->assertStringNotContainsString('cashItems=', $urls[1]);
         $this->assertStringNotContainsString('customerEmail=', $urls[1]);
+    }
+
+    /**
+     * Параметры fluent-сеттеров очищаются только УСПЕШНЫМ вызовом api(). После сбоя
+     * транспорта они сохраняются, чтобы повтор ушёл с тем же чеком, а не молча без него.
+     */
+    public function testFluentSetterParamsAreRetainedAfterFailedApiCall()
+    {
+        $urls = [];
+        $calls = 0;
+        // Первый вызов имитирует сбой транспорта (false), последующие — успех.
+        $transport = static function ($url) use (&$urls, &$calls) {
+            $urls[] = $url;
+            $calls++;
+            return $calls === 1 ? false : '{"result":{}}';
+        };
+        $unitPay = new UnitPay('unitpay.test', 'my-secret', $transport);
+        $unitPay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
+
+        try {
+            $unitPay->api('getPayment', ['paymentId' => 1]);
+            $this->fail('expected a transport exception on the first call');
+        } catch (\UnitpayTransportException $e) {
+            // ожидаемо: транспорт вернул false
+        }
+
+        $unitPay->api('getPayment', ['paymentId' => 2]);
+
+        // Чек уцелел после сбоя и ушёл с повтором.
+        $this->assertStringContainsString('cashItems=', $urls[0]);
+        $this->assertStringContainsString('cashItems=', $urls[1]);
     }
 
     public function testNonObjectResponseIsReportedAsTemporaryServerError()

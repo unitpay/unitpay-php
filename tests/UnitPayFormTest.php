@@ -82,6 +82,24 @@ final class UnitPayFormTest extends TestCase
         $this->assertArrayHasKey('cashItems', $q);
     }
 
+    /**
+     * form() очищает накопленные сеттерами параметры, поэтому повторно используемый
+     * экземпляр не переносит backUrl/чек/покупателя предыдущего заказа в следующий вызов.
+     */
+    public function testFormClearsAccumulatedParamsAfterCall()
+    {
+        $unitPay = new UnitPay('unitpay.ru', 'secret');
+        $unitPay->setBackUrl('https://shop.example/back')
+            ->setCustomerEmail('customer@example.com');
+
+        $first = $this->queryOf($unitPay->form('pk', 100, 'acc', 'desc'));
+        $second = $this->queryOf($unitPay->form('pk', 200, 'acc2', 'desc2'));
+
+        $this->assertArrayHasKey('backUrl', $first);
+        $this->assertArrayNotHasKey('backUrl', $second);
+        $this->assertArrayNotHasKey('customerEmail', $second);
+    }
+
     /** Подпись формы должна покрывать ТОЛЬКО четыре ключевых параметра, а не параметры сеттеров. */
     public function testFormSignatureExcludesSetterParams()
     {

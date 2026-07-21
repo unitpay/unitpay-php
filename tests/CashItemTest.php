@@ -87,6 +87,15 @@ final class CashItemTest extends TestCase
         $item->setMarkQuantity(1, 0);
     }
 
+    /** Неположительный числитель отклоняется отдельной проверкой (не только знаменатель). */
+    public function testSetMarkQuantityRejectsNonPositiveNumerator()
+    {
+        $item = new CashItem('X', 1, 1.0);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $item->setMarkQuantity(0, 3);
+    }
+
     /** count должен быть положительным числом. */
     public function testConstructorRejectsNonPositiveCount()
     {

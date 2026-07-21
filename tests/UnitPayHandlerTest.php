@@ -188,6 +188,26 @@ final class UnitPayHandlerTest extends TestCase
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
 
+    /** До первой успешной проверки геттеры проверенных данных возвращают null. */
+    public function testHandlerGettersAreNullBeforeVerification()
+    {
+        $unitPay = $this->handler($this->validRequest('pay'));
+
+        $this->assertNull($unitPay->getHandlerMethod());
+        $this->assertNull($unitPay->getHandlerParams());
+    }
+
+    /** После успешной проверки getHandlerParams() отдаёт именно проверенные параметры вебхука. */
+    public function testGetHandlerParamsReturnsVerifiedParams()
+    {
+        $request = $this->validRequest('pay');
+        $unitPay = $this->handler($request);
+
+        $this->assertTrue($unitPay->checkHandlerRequest());
+        $this->assertSame($request['params'], $unitPay->getHandlerParams());
+        $this->assertSame('42', $unitPay->getHandlerParams()['account']);
+    }
+
     /** Типизированное исключение, всё ещё наследующее исторический SPL-тип + маркерный интерфейс. */
     public function testSignatureFailureThrowsTypedExceptionStillCatchableAsInvalidArgument()
     {

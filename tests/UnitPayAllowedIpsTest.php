@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Динамический белый список IP вебхуков: refreshAllowedIps() загружает опубликованный
- * фид (https://<domain>/ips/ips_webhooks.json), addAllowedIps() добавляет IP мерчанта
- * поверх, и каждый путь fail-safe (никогда не опустошает список, не бросает исключений).
+ * перечень (https://<domain>/ips/ips_webhooks.json), addAllowedIps() добавляет IP мерчанта
+ * поверх, и каждый путь безопасен для сбоев (никогда не опустошает список, не бросает исключений).
  */
 final class UnitPayAllowedIpsTest extends TestCase
 {
@@ -62,7 +62,7 @@ final class UnitPayAllowedIpsTest extends TestCase
 
     public function testDefaultIpDroppedByFetchIsRejected(): void
     {
-        // Фид больше не содержит встроенный адрес → он должен перестать быть доверенным.
+        // Перечень больше не содержит встроенный адрес → он должен перестать быть доверенным.
         $unitPay = $this->handler($this->feed(['203.0.113.7']), self::DEFAULT_IP);
         $unitPay->refreshAllowedIps();
 
@@ -70,7 +70,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         $unitPay->checkHandlerRequest();
     }
 
-    // --- fail-safe (безопасный откат) ----------------------------------------
+    // --- безопасность при сбоях (откат к встроенному списку) -----------------
 
     public function testTransportFailureKeepsBuiltinList(): void
     {
@@ -124,7 +124,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
 
-    // --- URL фида ------------------------------------------------------------
+    // --- URL перечня ---------------------------------------------------------
 
     public function testRefreshFetchesTheCanonicalFeedUrl(): void
     {
@@ -139,7 +139,7 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertSame('https://unitpay.ru/ips/ips_webhooks.json', $captured);
     }
 
-    // --- CIDR из фида --------------------------------------------------------
+    // --- CIDR из перечня -----------------------------------------------------
 
     public function testCidrRangeFromFeedIsHonoured(): void
     {
@@ -176,14 +176,14 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertSame(['31.186.100.49', '51.250.20.9'], $unitPay->getAllowedIps());
     }
 
-    // --- инвалидация кэша матчера --------------------------------------------
+    // --- сброс кэша сопоставления --------------------------------------------
 
     public function testAddAllowedIpsInvalidatesTheMatcherCache(): void
     {
         $customIp = '198.51.100.5';
         $unitPay = $this->handler($this->feed([self::DEFAULT_IP]), $customIp);
 
-        // Первая проверка строит и кэширует матчер без кастомного IP → отклонение.
+        // Первая проверка строит и кэширует сопоставление без добавленного IP → отклонение.
         try {
             $unitPay->checkHandlerRequest();
             $this->fail('expected the custom IP to be rejected before it is added');
@@ -191,7 +191,7 @@ final class UnitPayAllowedIpsTest extends TestCase
             // ожидаемо
         }
 
-        // Добавление IP должно инвалидировать кэш матчера, чтобы следующая проверка его увидела.
+        // Добавление IP должно сбросить кэш сопоставления, чтобы следующая проверка его увидела.
         $unitPay->addAllowedIps([$customIp]);
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
@@ -227,10 +227,12 @@ final class UnitPayAllowedIpsTest extends TestCase
     public function invalidEntries(): array
     {
         return [
-            'garbage'        => ['garbage'],
-            'out of range'   => ['999.999.999.999'],
-            'empty bits'     => ['203.0.113.0/'],
-            'non-digit bits' => ['203.0.113.0/abc'],
+            'garbage'          => ['garbage'],
+            'out of range'     => ['999.999.999.999'],
+            'empty bits'       => ['203.0.113.0/'],
+            'non-digit bits'   => ['203.0.113.0/abc'],
+            'ipv4 bits too big' => ['203.0.113.0/33'],
+            'ipv6 bits too big' => ['2001:db8::/129'],
         ];
     }
 }
