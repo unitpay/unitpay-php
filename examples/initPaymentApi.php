@@ -8,8 +8,9 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/payments/create-payment
  */
 
-require_once('./orderInfo.php');
-require_once('../UnitPay.php');
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/order.php';
+require_once __DIR__ . '/../UnitPay.php';
 
 $unitpay = new UnitPay($domain, $secretKey);
 
@@ -21,39 +22,50 @@ $unitpay = new UnitPay($domain, $secretKey);
  * @link https://help.unitpay.ru/payments/create-payment
  * @link https://help.unitpay.ru/book-of-reference/payment-system-codes
  */
-$response = $unitpay->api('initPayment', [
-    'account' => $orderId,
-    'desc' => $orderDesc,
-    'sum' => $orderSum,
-    'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
-    'currency' => $orderCurrency,
-    'projectId' => $projectId,
-]);
+try {
+    $response = $unitpay->api('initPayment', [
+        'account' => $orderId,
+        'desc' => $orderDesc,
+        'sum' => $orderSum,
+        'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
+        'currency' => $orderCurrency,
+        'projectId' => $projectId,
+    ]);
 
-// Сценарий с редиректом: отправляем пользователя на платёжный шлюз.
-if (isset($response->result->type)
-    && $response->result->type === 'redirect') {
-    $redirectUrl = $response->result->redirectUrl;
-    $paymentId = $response->result->paymentId;
-    header("Location: " . $redirectUrl);
+    // Ответ initPayment бывает трёх типов: redirect, invoice, response.
+    switch ($response->result->type ?? null) {
+        case 'redirect':
+            // paymentId — в $response->result->paymentId, сохраните у себя.
+            if (isset($response->result->redirectUrl)) {
+                header('Location: ' . $response->result->redirectUrl);
+                exit;
+            }
+            var_dump($response);
+            break;
 
-    // Сценарий со счётом (без редиректа).
-} elseif (isset($response->result->type)
-    && $response->result->type === 'invoice') {
-    $receiptUrl = $response->result->receiptUrl;
-    $paymentId = $response->result->paymentId;
-    $invoiceId = $response->result->invoiceId;
-    header("Location: " . $receiptUrl);
+        case 'invoice':
+            // Помимо receiptUrl доступны $response->result->paymentId и ->invoiceId.
+            if (isset($response->result->receiptUrl)) {
+                header('Location: ' . $response->result->receiptUrl);
+                exit;
+            }
+            var_dump($response);
+            break;
 
-    // Обработано без редиректа (например, рекуррентное/подписное списание).
-} elseif (isset($response->result->type)
-    && $response->result->type === 'response') {
-    $paymentId = $response->result->paymentId;
-    $message = $response->result->message;
-    // Необязательная страница статуса в Unitpay: $response->result->statusUrl
-    print $message;
+        case 'response':
+            // Без перенаправления (например, рекуррентное списание); статус — в ->statusUrl.
+            print $response->result->message ?? '';
+            break;
 
-} elseif (isset($response->error->message)) {
-    $error = $response->error->message;
-    print 'Error: '.$error;
+        default:
+            // Типа нет — как правило, ошибка уровня API.
+            if (isset($response->error->message)) {
+                print 'Error: ' . $response->error->message;
+            } else {
+                var_dump($response);
+            }
+    }
+} catch (UnitpayExceptionInterface $e) {
+    // Сбой на стороне SDK: сеть, отключённый allow_url_fopen, битый JSON и т.п.
+    print 'SDK error: ' . $e->getMessage();
 }

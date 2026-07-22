@@ -23,14 +23,16 @@ exposing two classes in the **global namespace**: `UnitPay` and `CashItem`.
 These are just some quick examples. The [`examples/`](examples) folder has
 runnable samples for every method group:
 
-* [`initPaymentForm.php`](examples/initPaymentForm.php) / [`initPaymentApi.php`](examples/initPaymentApi.php) — create a payment (form / API)
+* [`paymentForm.php`](examples/paymentForm.php) / [`initPaymentApi.php`](examples/initPaymentApi.php) — create a payment (form / API)
+* [`receipt.php`](examples/receipt.php) — 54-FZ fiscal receipt via `CashItem`
 * [`paymentInfo.php`](examples/paymentInfo.php) — `getPayment`
-* [`handler.php`](examples/handler.php) — webhook handler (`check` / `pay` / `error`)
+* [`webhook.php`](examples/webhook.php) — webhook handler (`check` / `pay` / `error`)
 * [`refund.php`](examples/refund.php) — `refundPayment`
 * [`twoStagePayment.php`](examples/twoStagePayment.php) — `confirmPayment` / `cancelPayment`
-* [`subscription.php`](examples/subscription.php) — list / info / close subscriptions
+* [`subscriptions.php`](examples/subscriptions.php) — list / info / close subscriptions
 * [`payout.php`](examples/payout.php) — payouts (mass-payment) + SBP bank list
-* [`accountApi.php`](examples/accountApi.php) — balance, commissions, rates, BIN, `offsetAdvance`, methods
+* [`accountInfo.php`](examples/accountInfo.php) — balance, commissions, rates, BIN, methods
+* [`offsetAdvance.php`](examples/offsetAdvance.php) — advance-offset fiscal receipt
 
 ### Payment integration using Unitpay form
 

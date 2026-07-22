@@ -12,35 +12,38 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/api/poluchenie-spravochnika-bankov-uchastnikov-sbp-api
  */
 
-require_once('./orderInfo.php');
-require_once('../UnitPay.php');
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../UnitPay.php';
 
 $unitpay = new UnitPay($domain, $secretKey);
 
 $account = ['login' => $login, 'secretKey' => $accountSecretKey];
-
-// Банки — участники СБП: memberId обязателен для выплат по СБП.
-$banks = $unitpay->api('getSbpBankList', $account);
-var_dump($banks->result ?? $banks->error ?? $banks);
-
 $transactionId = 'payout-1782'; // уникальный на вашей стороне
 
-// Создаём выплату получателю по СБП.
-$response = $unitpay->api('massPayment', $account + [
-    'transactionId' => $transactionId,
-    'sum'           => 100,
-    'purse'         => '79510000071',
-    'paymentType'   => 'sbp',
-    'memberId'      => '100000000004', // из getSbpBankList; только для СБП
-]);
+try {
+    // Банки — участники СБП: memberId обязателен для выплат по СБП.
+    $banks = $unitpay->api('getSbpBankList', $account);
+    var_dump($banks->result ?? $banks->error ?? $banks);
 
-if (isset($response->result)) {
-    $payoutId = $response->result->payoutId;
-    $status = $response->result->status; // success | not_completed
+    // Создаём выплату получателю по СБП.
+    $response = $unitpay->api('massPayment', $account + [
+        'transactionId' => $transactionId,
+        'sum'           => 100,
+        'purse'         => '79510000071',
+        'paymentType'   => 'sbp',
+        'memberId'      => '100000000004', // из getSbpBankList; только для СБП
+    ]);
 
-    // Позже — проверяем статус выплаты по вашему transactionId.
-    $info = $unitpay->api('massPaymentStatus', $account + ['transactionId' => $transactionId]);
-    var_dump($info->result ?? $info->error ?? $info);
-} elseif (isset($response->error->message)) {
-    print 'Error: ' . $response->error->message;
+    if (isset($response->result)) {
+        $payoutId = $response->result->payoutId;
+        $status = $response->result->status; // success | not_completed
+
+        // Позже — проверяем статус выплаты по вашему transactionId.
+        $info = $unitpay->api('massPaymentStatus', $account + ['transactionId' => $transactionId]);
+        var_dump($info->result ?? $info->error ?? $info);
+    } elseif (isset($response->error->message)) {
+        print 'Error: ' . $response->error->message;
+    }
+} catch (UnitpayExceptionInterface $e) {
+    print 'SDK error: ' . $e->getMessage();
 }

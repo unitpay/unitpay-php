@@ -11,21 +11,25 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/api/cancel-payment
  */
 
-require_once('./orderInfo.php');
-require_once('../UnitPay.php');
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../UnitPay.php';
 
 $unitpay = new UnitPay($domain, $secretKey);
 
 $paymentId = 3403575;
 
-// Списываем заблокированные средства.
-$response = $unitpay->api('confirmPayment', ['paymentId' => $paymentId]);
+try {
+    // Списываем заблокированные средства.
+    $response = $unitpay->api('confirmPayment', ['paymentId' => $paymentId]);
 
-// ...или разблокируем без списания.
-// $response = $unitpay->api('cancelPayment', ['paymentId' => $paymentId]);
+    // ...или разблокируем без списания.
+    // $response = $unitpay->api('cancelPayment', ['paymentId' => $paymentId]);
 
-if (isset($response->message)) {
-    print $response->message;
-} elseif (isset($response->error->message)) {
-    print 'Error: ' . $response->error->message;
+    if (isset($response->message)) {
+        print $response->message;
+    } elseif (isset($response->error->message)) {
+        print 'Error: ' . $response->error->message;
+    }
+} catch (UnitpayExceptionInterface $e) {
+    print 'SDK error: ' . $e->getMessage();
 }

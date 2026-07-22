@@ -6,10 +6,14 @@
  * @link https://help.unitpay.ru/payments/payment-handler
  */
 
-require_once('./orderInfo.php');
-require_once('../UnitPay.php');
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/order.php';
+require_once __DIR__ . '/../UnitPay.php';
 
 $unitpay = new UnitPay($domain, $secretKey);
+
+// Ответ обработчика — JSON (getSuccessHandlerResponse/getErrorHandlerResponse).
+header('Content-Type: application/json; charset=UTF-8');
 
 // Держите белый список IP вебхуков актуальным БЕЗ сетевого запроса на каждый вызов:
 // обновляйте его по расписанию (например, ежедневным cron) и кэшируйте результат —
@@ -36,33 +40,37 @@ try {
 
     // Очень важно: сверьте вебхук со своими данными заказа до завершения заказа.
     if (
-        $params['orderSum'] != $orderSum ||
-        $params['orderCurrency'] != $orderCurrency ||
-        $params['account'] != $orderId ||
-        $params['projectId'] != $projectId
+        ($params['orderSum'] ?? null) != $orderSum ||
+        ($params['orderCurrency'] ?? null) != $orderCurrency ||
+        ($params['account'] ?? null) != $orderId ||
+        ($params['projectId'] ?? null) != $projectId
     ) {
         throw new InvalidArgumentException('Order validation Error!');
     }
 
     switch ($method) {
-        // 'check' — проверяем, что заказ можно оплатить (статус сервера, заказ в БД, ...).
         case 'check':
+            // 'check' — проверяем, что заказ можно оплатить (статус сервера, заказ в БД, ...).
             print $unitpay->getSuccessHandlerResponse('Check Success. Ready to pay.');
             break;
-        // 'pay' — деньги получены; здесь завершаем заказ.
         case 'pay':
+            // 'pay' — деньги получены; здесь завершаем заказ.
             print $unitpay->getSuccessHandlerResponse('Pay Success');
             break;
-        // 'preauth' — двухстадийный платёж: деньги только ЗАБЛОКИРОВАНЫ, ещё не списаны.
-        // НЕ выдавайте товары/услуги здесь; ждите 'pay'. Подтвердите приём, чтобы
-        // уведомление не считалось неуспешным.
         case 'preauth':
+            // 'preauth' — двухстадийный платёж: деньги только ЗАБЛОКИРОВАНЫ, ещё не списаны.
+            // НЕ выдавайте товары/услуги здесь; ждите 'pay'. Подтвердите приём, чтобы
+            // уведомление не считалось неуспешным.
             print $unitpay->getSuccessHandlerResponse('Preauth received. Funds held, awaiting capture.');
             break;
-        // 'error' — произошла ошибка; залогируйте её.
         case 'error':
+            // 'error' — произошла ошибка; залогируйте её.
             print $unitpay->getSuccessHandlerResponse('Error logged');
             break;
+        default:
+            // Неизвестный метод: не оставляем пустой ответ (Unitpay счёл бы его неуспехом
+            // без диагностики) — отдаём ошибку через общий catch ниже.
+            throw new InvalidArgumentException('Unexpected handler method: ' . $method);
     }
 } catch (Exception $e) {
     // Любая ошибка (неверная подпись, недопустимый IP, расхождение заказа) вернёт ошибку в Unitpay.
