@@ -18,7 +18,11 @@ final class UnitPayAllowedIpsTest extends TestCase
     /** Один из встроенных адресов по умолчанию. */
     private const DEFAULT_IP = '31.186.100.49';
 
-    /** Строит корректный подписанный вебхук 'pay'. */
+    /**
+     * Строит корректный подписанный вебхук 'pay'.
+     *
+     * @return array{method: string, params: array<string, string>}
+     */
     private function validRequest(): array
     {
         $params = [
@@ -45,6 +49,9 @@ final class UnitPayAllowedIpsTest extends TestCase
         return new UnitPay('unitpay.ru', self::SECRET, $transport, $this->validRequest(), $ip);
     }
 
+    /**
+     * @param string[] $ips
+     */
     private function feed(array $ips): string
     {
         return json_encode(['webhooks' => $ips]);
@@ -206,6 +213,9 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertTrue(UnitpayIpAllowlist::isValidEntry($entry));
     }
 
+    /**
+     * @return array<string, array{0: string}>
+     */
     public function validEntries(): array
     {
         return [
@@ -224,6 +234,9 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertFalse(UnitpayIpAllowlist::isValidEntry($entry));
     }
 
+    /**
+     * @return array<string, array{0: string}>
+     */
     public function invalidEntries(): array
     {
         return [

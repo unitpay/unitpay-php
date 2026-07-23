@@ -191,20 +191,22 @@ final class CashItem
     /** Иная единица измерения */
     public const MEASURE_OTHER = 255;
 
-    private $name;
+    private string $name;
+    /** @var int|float */
     private $count;
-    private $price;
-    private $nds;
-    private $type;
-    private $paymentMethod;
-    private $sum;
-    private $currency;
-    private $measure;
-    private $nomenclatureCode;
-    private $markCode;
-    private $markQuantity;
-    private $preText;
-    private $postText;
+    private float $price;
+    private string $nds;
+    private string $type;
+    private string $paymentMethod;
+    private ?float $sum = null;
+    private ?string $currency = null;
+    private ?int $measure = null;
+    private ?string $nomenclatureCode = null;
+    private ?string $markCode = null;
+    /** @var array{numerator: int, denominator: int}|null */
+    private ?array $markQuantity = null;
+    private ?string $preText = null;
+    private ?string $postText = null;
 
     /**
      * $count и $price проверяются через is_numeric() ДО проверки диапазона: в PHP 8
@@ -214,20 +216,16 @@ final class CashItem
      * весовых/объёмных товаров (MEASURE_KG/G/L, ...), а бэкенд округляет количество до
      * 3 знаков, поэтому приведение к int тихо испортило бы чек.
      *
-     * @param string $name
      * @param int|float|string $count положительное количество (дробное допустимо для веса/объёма)
      * @param float|int|string $price неотрицательная цена за единицу
-     * @param string $nds
-     * @param string $type
-     * @param string $paymentMethod
      */
     public function __construct(
-        $name,
+        string $name,
         $count,
         $price,
-        $nds = self::NDS_NONE,
-        $type = self::PAYMENT_OBJECT_COMMODITY,
-        $paymentMethod = self::PAYMENT_METHOD_PREPAYMENT_FULL
+        string $nds = self::NDS_NONE,
+        string $type = self::PAYMENT_OBJECT_COMMODITY,
+        string $paymentMethod = self::PAYMENT_METHOD_PREPAYMENT_FULL
     ) {
         if (!is_numeric($count) || $count <= 0) {
             throw new UnitpayValidationException('CashItem count must be a positive number');
@@ -243,10 +241,7 @@ final class CashItem
         $this->paymentMethod = $paymentMethod;
     }
 
-    /**
-     * @return string
-     */
-    public function getName()
+    public function getName(): string
     {
         return $this->name;
     }
@@ -259,34 +254,22 @@ final class CashItem
         return $this->count;
     }
 
-    /**
-     * @return float
-     */
-    public function getPrice()
+    public function getPrice(): float
     {
         return $this->price;
     }
 
-    /**
-     * @return string
-     */
-    public function getNds()
+    public function getNds(): string
     {
         return $this->nds;
     }
 
-    /**
-     * @return string
-     */
-    public function getType()
+    public function getType(): string
     {
         return $this->type;
     }
 
-    /**
-     * @return string
-     */
-    public function getPaymentMethod()
+    public function getPaymentMethod(): string
     {
         return $this->paymentMethod;
     }
@@ -294,95 +277,70 @@ final class CashItem
     /**
      * Итоговая сумма позиции. Если не задана, бэкенд считает её как price * count.
      * Не может превышать round(price * count, 2).
-     * @param float $sum
-     * @return $this
      */
-    public function setSum($sum)
+    public function setSum(float $sum): self
     {
         $this->sum = $sum;
         return $this;
     }
 
-    /**
-     * @return float|null
-     */
-    public function getSum()
+    public function getSum(): ?float
     {
         return $this->sum;
     }
 
     /**
      * Валюта позиции (ISO 4217). По умолчанию на бэкенде RUB.
-     * @param string $currency
-     * @return $this
      */
-    public function setCurrency($currency)
+    public function setCurrency(string $currency): self
     {
         $this->currency = $currency;
         return $this;
     }
 
-    /**
-     * @return string|null
-     */
-    public function getCurrency()
+    public function getCurrency(): ?string
     {
         return $this->currency;
     }
 
     /**
      * Единица измерения, одна из констант MEASURE_*.
-     * @param int $measure
-     * @return $this
      */
-    public function setMeasure($measure)
+    public function setMeasure(int $measure): self
     {
         $this->measure = $measure;
         return $this;
     }
 
-    /**
-     * @return int|null
-     */
-    public function getMeasure()
+    public function getMeasure(): ?int
     {
         return $this->measure;
     }
 
     /**
      * Код товарной номенклатуры (маркировка).
-     * @param string $nomenclatureCode
-     * @return $this
      */
-    public function setNomenclatureCode($nomenclatureCode)
+    public function setNomenclatureCode(string $nomenclatureCode): self
     {
         $this->nomenclatureCode = $nomenclatureCode;
         return $this;
     }
 
-    /**
-     * @return string|null
-     */
-    public function getNomenclatureCode()
+    public function getNomenclatureCode(): ?string
     {
         return $this->nomenclatureCode;
     }
 
     /**
      * Код маркировки товара.
-     * @param string $markCode
-     * @return $this
      */
-    public function setMarkCode($markCode)
+    public function setMarkCode(string $markCode): self
     {
         $this->markCode = $markCode;
         return $this;
     }
 
-    /**
-     * @return string|null
-     */
-    public function getMarkCode()
+    public function getMarkCode(): ?string
     {
         return $this->markCode;
     }
@@ -390,11 +348,8 @@ final class CashItem
     /**
      * Дробное количество маркированного товара.
      * Допускается только при measure = MEASURE_ITEM и count = 1.
-     * @param int $numerator   числитель
-     * @param int $denominator знаменатель
-     * @return $this
      */
-    public function setMarkQuantity($numerator, $denominator)
+    public function setMarkQuantity(int $numerator, int $denominator): self
     {
         if ((int) $numerator <= 0) {
             throw new UnitpayValidationException('CashItem markQuantity numerator must be a positive integer');
@@ -410,47 +365,37 @@ final class CashItem
     }
 
     /**
-     * @return array|null
+     * @return array{numerator: int, denominator: int}|null
      */
-    public function getMarkQuantity()
+    public function getMarkQuantity(): ?array
     {
         return $this->markQuantity;
     }
 
     /**
      * Текст перед позицией в чеке.
-     * @param string $preText
-     * @return $this
      */
-    public function setPreText($preText)
+    public function setPreText(string $preText): self
     {
         $this->preText = $preText;
         return $this;
     }
 
-    /**
-     * @return string|null
-     */
-    public function getPreText()
+    public function getPreText(): ?string
     {
         return $this->preText;
     }
 
     /**
      * Текст после позиции в чеке.
-     * @param string $postText
-     * @return $this
      */
-    public function setPostText($postText)
+    public function setPostText(string $postText): self
     {
         $this->postText = $postText;
         return $this;
     }
 
-    /**
-     * @return string|null
-     */
-    public function getPostText()
+    public function getPostText(): ?string
     {
         return $this->postText;
     }
@@ -463,7 +408,8 @@ final class CashItem
  */
 final class UnitpayIpAllowlist
 {
-    private $entries;
+    /** @var string[] */
+    private array $entries;
 
     /**
      * @param string[] $entries точные IP и/или CIDR-диапазоны (например, "77.75.153.0/25")
@@ -473,11 +419,7 @@ final class UnitpayIpAllowlist
         $this->entries = $entries;
     }
 
-    /**
-     * @param string $ip
-     * @return bool
-     */
-    public function contains($ip)
+    public function contains(string $ip): bool
     {
         $ipBin = $this->toBinary($ip);
         foreach ($this->entries as $entry) {
@@ -503,11 +445,9 @@ final class UnitpayIpAllowlist
     }
 
     /**
-     * @param string $cidr
      * @param string $ipBin упакованный in_addr клиентского IP (из toBinary())
-     * @return bool
      */
-    private function cidrContains($cidr, $ipBin)
+    private function cidrContains(string $cidr, string $ipBin): bool
     {
         list($subnet, $bits) = explode('/', $cidr, 2);
         if (!ctype_digit($bits)) {
@@ -525,10 +465,8 @@ final class UnitpayIpAllowlist
      * или CIDR-диапазоном вида "адрес/биты". Используется для проверки загруженного
      * списка IP до того, как он заменит встроенный, чтобы некорректный JSON не мог
      * опустошить белый список.
-     * @param string $entry
-     * @return bool
      */
-    public static function isValidEntry($entry)
+    public static function isValidEntry(string $entry): bool
     {
         if (strpos($entry, '/') === false) {
             return filter_var($entry, FILTER_VALIDATE_IP) !== false;
@@ -549,10 +487,9 @@ final class UnitpayIpAllowlist
      * некорректном JSON, отсутствующем или не-массивном ключе "webhooks" либо когда
      * ни одна запись не является корректным IP/CIDR — так плохой перечень не может
      * опустошить белый список.
-     * @param string $body
      * @return string[]|null
      */
-    public static function parseWebhooksFeed($body)
+    public static function parseWebhooksFeed(string $body): ?array
     {
         if ($body === '') {
             return null;
@@ -571,10 +508,9 @@ final class UnitpayIpAllowlist
     }
 
     /**
-     * @param string $ip
      * @return string|null упакованный in_addr, либо null, если $ip не является корректным адресом
      */
-    private function toBinary($ip)
+    private function toBinary(string $ip): ?string
     {
         if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
             return null;
@@ -583,13 +519,7 @@ final class UnitpayIpAllowlist
         return $binary === false ? null : $binary;
     }
 
-    /**
-     * @param string $ipBin
-     * @param string $subnetBin
-     * @param int $bits
-     * @return bool
-     */
-    private function prefixMatches($ipBin, $subnetBin, $bits)
+    private function prefixMatches(string $ipBin, string $subnetBin, int $bits): bool
     {
         if ($bits > strlen($ipBin) * 8) {
             return false;
@@ -657,8 +587,9 @@ class UnitPay
     /**
      * Поддерживаемые методы api() и их обязательные параметры. secretKey
      * подставляется и проверяется в api(), поэтому здесь не перечислен.
+     * @var array<string, string[]>
      */
-    private $requiredUnitpayMethodsParams = [
+    private array $requiredUnitpayMethodsParams = [
         'initPayment'         => ['account', 'sum', 'projectId', 'paymentType'],
         'getPayment'          => ['paymentId'],
         'refundPayment'       => ['paymentId'],
@@ -683,49 +614,55 @@ class UnitPay
      * Методы вебхуков, которые Unitpay шлёт обработчику. 'preauth' — уведомление о
      * двухстадийной блокировке средств (деньги заблокированы, но ещё не списаны):
      * должно проходить проверку как остальные, а не отклоняться как неподдерживаемое.
+     * @var string[]
      */
-    private $supportedPartnerMethods = ['check', 'pay', 'preauth', 'error'];
+    private array $supportedPartnerMethods = ['check', 'pay', 'preauth', 'error'];
     /**
      * Опубликованные исходящие IP Unitpay. 127.0.0.1 здесь намеренно НЕТ: за
      * обратным прокси на том же хосте REMOTE_ADDR равен 127.0.0.1, что превратило бы
      * проверку IP в фикцию. Добавляйте его явно через setAllowedIps() только для
      * локальной отладки.
+     * @var string[]
      */
-    private $supportedUnitpayIp = [
+    private array $supportedUnitpayIp = [
         '31.186.100.49',
         '51.250.20.9',
     ];
 
-    private $secretKey;
-    private $params = [];
-    private $apiUrl;
-    private $formUrl;
+    private ?string $secretKey;
+    /** @var array<string, mixed> */
+    private array $params = [];
+    private string $apiUrl;
+    private string $formUrl;
+    /** @var callable|null */
     private $transport;
-    private $request;
-    private $clientIp;
-    private $handlerMethod;
-    private $handlerParams;
-    private $ipAllowlist;
+    /** @var array<string, mixed>|null */
+    private ?array $request;
+    private ?string $clientIp;
+    private ?string $handlerMethod = null;
+    /** @var array<string, mixed>|null */
+    private ?array $handlerParams = null;
+    private ?UnitpayIpAllowlist $ipAllowlist = null;
     /**
      * IP самого мерчанта, добавленные через addAllowedIps(); всегда применяются
      * поверх списка Unitpay и сохраняются при refreshAllowedIps()/setAllowedIps().
+     * @var string[]
      */
-    private $customIps = [];
-    private $ipsUrl;
-    private $telemetryUrl;
-    private $telemetryEnabled = false;
+    private array $customIps = [];
+    private string $ipsUrl;
+    private string $telemetryUrl;
+    private bool $telemetryEnabled = false;
 
     /**
      * @param string $domain только хост, например "unitpay.ru" — без схемы и пути (станет "https://$domain/api").
-     * @param string|null $secretKey
      * @param callable|null $transport исходящий HTTP-транспорт для api(): fn(string $url): string|false.
      *                                 По умолчанию file_get_contents(). Подменяйте, чтобы тестировать api() без сети.
-     * @param array|null $request      массив входящего вебхука, читаемый checkHandlerRequest().
+     * @param array<string, mixed>|null $request массив входящего вебхука, читаемый checkHandlerRequest().
      *                                 По умолчанию $_GET. Подменяйте, чтобы тестировать обработчик без суперглобальных переменных.
      * @param string|null $clientIp    IP отправителя, используемый getIp(). По умолчанию $_SERVER['REMOTE_ADDR'].
      *                                 Подменяйте, чтобы тестировать белый список IP без суперглобальных переменных.
      */
-    public function __construct($domain, $secretKey = null, ?callable $transport = null, ?array $request = null, ?string $clientIp = null)
+    public function __construct(string $domain, ?string $secretKey = null, ?callable $transport = null, ?array $request = null, ?string $clientIp = null)
     {
         $this->secretKey = $secretKey;
         $this->apiUrl = "https://$domain/api";
@@ -746,9 +683,8 @@ class UnitPay
      * вы загрузили и закэшировали сами.
      * @link https://help.unitpay.ru/book-of-reference/ip-addresses
      * @param string[] $ips
-     * @return $this
      */
-    public function setAllowedIps(array $ips)
+    public function setAllowedIps(array $ips): self
     {
         $this->supportedUnitpayIp = $ips;
         $this->ipAllowlist = null;
@@ -761,9 +697,8 @@ class UnitPay
      * Unitpay, эти сохраняются при вызовах refreshAllowedIps()/setAllowedIps().
      * Дубликаты убираются.
      * @param string[] $ips точные IP и/или CIDR-диапазоны
-     * @return $this
      */
-    public function addAllowedIps(array $ips)
+    public function addAllowedIps(array $ips): self
     {
         $this->customIps = array_values(array_unique(array_merge($this->customIps, $ips)));
         $this->ipAllowlist = null;
@@ -789,9 +724,8 @@ class UnitPay
      * Метод делает блокирующий сетевой запрос — вызывайте его периодически (например,
      * ежедневным cron) и кэшируйте getAllowedIps() у себя; НЕ вызывайте его на каждый
      * вебхук.
-     * @return $this
      */
-    public function refreshAllowedIps()
+    public function refreshAllowedIps(): self
     {
         $ips = $this->fetchUnitpayIps();
         if ($ips !== null) {
@@ -808,7 +742,7 @@ class UnitPay
      * сетевой запрос на каждый вызов.
      * @return string[]
      */
-    public function getAllowedIps()
+    public function getAllowedIps(): array
     {
         return array_values(array_unique(array_merge($this->supportedUnitpayIp, $this->customIps)));
     }
@@ -817,7 +751,7 @@ class UnitPay
      * Загружает и проверяет опубликованный фид IP вебхуков.
      * @return string[]|null проверенный непустой список либо null при любой ошибке
      */
-    private function fetchUnitpayIps()
+    private function fetchUnitpayIps(): ?array
     {
         $body = $this->httpGet($this->ipsUrl);
         return is_string($body) ? UnitpayIpAllowlist::parseWebhooksFeed($body) : null;
@@ -837,11 +771,9 @@ class UnitPay
      * приводятся к '' — implode() не выдаёт предупреждение, а проверка всё равно
      * проваливается, потому что секрет добавляется в любом случае.
      *
-     * @param array $params
-     * @param string|null $method
-     * @return string
+     * @param array<array-key, mixed> $params
      */
-    public function getSignature(array $params, $method = null)
+    public function getSignature(array $params, ?string $method = null): string
     {
         unset($params['sign'], $params['signature'], $params[PHP_INT_MAX]);
         ksort($params);
@@ -863,9 +795,8 @@ class UnitPay
 
     /**
      * IP отправителя входящего запроса (подменённый clientIp либо $_SERVER['REMOTE_ADDR']).
-     * @return string
      */
-    protected function getIp()
+    protected function getIp(): string
     {
         return $this->clientIp !== null ? $this->clientIp : ($_SERVER['REMOTE_ADDR'] ?? '');
     }
@@ -874,10 +805,8 @@ class UnitPay
      * Разрешено ли $ip вызывать обработчик. Сопоставляет точные адреса и CIDR-подсети
      * (IPv4/IPv6) через UnitpayIpAllowlist, поэтому setAllowedIps(['77.75.153.0/25'])
      * работает. Переопределите для логики, учитывающей прокси.
-     * @param string $ip
-     * @return bool
      */
-    protected function isAllowedIp($ip)
+    protected function isAllowedIp(string $ip): bool
     {
         if ($this->ipAllowlist === null) {
             $this->ipAllowlist = new UnitpayIpAllowlist(
@@ -899,12 +828,11 @@ class UnitPay
      * file_get_contents гасит своё предупреждение транспорта через set_error_handler,
      * а не оператором '@' (который запрещён правилами QA) — иначе это предупреждение
      * записало бы в лог URL с секретом.
-     * @param string $url
      * @param string[] $headers HTTP-заголовки формата "Имя: значение" (фингерпринт Слоя A / beacon).
      * @param int|null $timeoutMs жёсткий таймаут в мс (beacon Слоя B); null — обычные таймауты api().
      * @return string|false
      */
-    protected function httpGet($url, array $headers = [], $timeoutMs = null)
+    protected function httpGet(string $url, array $headers = [], ?int $timeoutMs = null)
     {
         if ($this->transport !== null) {
             return call_user_func($this->transport, $url, $headers, $timeoutMs);
@@ -955,15 +883,9 @@ class UnitPay
      * заданные fluent-сеттерами (setCashItems/setCustomerEmail/setBackUrl/...),
      * подмешиваются и затем очищаются, поэтому повторно используемый экземпляр не
      * переносит параметры этого вызова в следующий form()/api().
-     * @param string $publicKey
      * @param string|float|int $sum
-     * @param string $account
-     * @param string $desc
-     * @param string $currency
-     * @param string $locale
-     * @return string
      */
-    public function form($publicKey, $sum, $account, $desc, $currency = 'RUB', $locale = 'ru')
+    public function form(string $publicKey, $sum, string $account, string $desc, string $currency = 'RUB', string $locale = 'ru'): string
     {
         if (empty($this->secretKey)) {
             throw new UnitpayValidationException('SecretKey is null');
@@ -984,10 +906,8 @@ class UnitPay
 
     /**
      * Задаёт email покупателя.
-     * @param string $email
-     * @return $this
      */
-    public function setCustomerEmail($email)
+    public function setCustomerEmail(string $email): self
     {
         $this->params['customerEmail'] = $email;
         return $this;
@@ -995,10 +915,8 @@ class UnitPay
 
     /**
      * Задаёт телефон покупателя.
-     * @param string $phone
-     * @return $this
      */
-    public function setCustomerPhone($phone)
+    public function setCustomerPhone(string $phone): self
     {
         $this->params['customerPhone'] = $phone;
         return $this;
@@ -1010,9 +928,8 @@ class UnitPay
      * исключение вместо отправки пустого чека, если json_encode не удался (например,
      * имя не в UTF-8 / в Windows-1251).
      * @param CashItem[] $items
-     * @return $this
      */
-    public function setCashItems(array $items)
+    public function setCashItems(array $items): self
     {
         $cashItems = array_map(static function ($item) {
             /** @var CashItem $item */
@@ -1055,10 +972,8 @@ class UnitPay
 
     /**
      * Задаёт URL, на который Unitpay вернёт плательщика после оплаты.
-     * @param string $backUrl
-     * @return $this
      */
-    public function setBackUrl($backUrl)
+    public function setBackUrl(string $backUrl): self
     {
         $this->params['backUrl'] = $backUrl;
         return $this;
@@ -1074,14 +989,12 @@ class UnitPay
      * приоритет. Явный непустой secretKey в $params переопределяет ключ экземпляра,
      * поэтому методы уровня аккаунта (getPartner, getCommissions, выплаты, ...) могут
      * использовать ключ аккаунта.
-     * @param string $method
-     * @param array $params
-     * @return object
+     * @param array<string, mixed> $params
      *
      * @throws InvalidArgumentException
      * @throws UnexpectedValueException
      */
-    public function api($method, array $params = [])
+    public function api(string $method, array $params = []): object
     {
         if (!isset($this->requiredUnitpayMethodsParams[$method])) {
             $this->reportTelemetry(self::ERR_METHOD_NOT_SUPPORTED, $method);
@@ -1129,12 +1042,11 @@ class UnitPay
      * время) и белый список IP отправителя. При успехе выставляет проверенные метод и
      * параметры, доступные через getHandlerMethod()/getHandlerParams() (учитывая
      * подменённый запрос, а не $_GET).
-     * @return bool
      *
      * @throws InvalidArgumentException
      * @throws UnexpectedValueException
      */
-    public function checkHandlerRequest()
+    public function checkHandlerRequest(): bool
     {
         $ip = $this->getIp();
         if (empty($this->secretKey)) {
@@ -1183,9 +1095,8 @@ class UnitPay
      * Метод вебхука, проверенный последним успешным checkHandlerRequest()
      * ('check' | 'pay' | 'preauth' | 'error'). Читайте его вместо $_GET, чтобы
      * учитывался подменённый запрос. До успешной проверки — null.
-     * @return string|null
      */
-    public function getHandlerMethod()
+    public function getHandlerMethod(): ?string
     {
         return $this->handlerMethod;
     }
@@ -1193,9 +1104,9 @@ class UnitPay
     /**
      * Параметры вебхука, проверенные последним успешным checkHandlerRequest().
      * До успешной проверки — null.
-     * @return array|null
+     * @return array<string, mixed>|null
      */
-    public function getHandlerParams()
+    public function getHandlerParams(): ?array
     {
         return $this->handlerParams;
     }
@@ -1204,9 +1115,8 @@ class UnitPay
      * Машиночитаемый токен фингерпринта для form()-URL: <платформа>_<версия SDK>_<major.minor PHP>.
      * Только URL-safe символы (http_build_query их не кодирует); major.minor — чтобы не светить
      * точный патч PHP в видимом покупателю URL платёжной формы.
-     * @return string
      */
-    private function getSdkToken()
+    private function getSdkToken(): string
     {
         return 'php_' . self::VERSION . '_' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
     }
@@ -1214,9 +1124,8 @@ class UnitPay
     /**
      * Строка самоидентификации SDK для заголовка User-Agent (полная версия PHP —
      * заголовок невидим для покупателя, полезен для диагностики).
-     * @return string
      */
-    private function getUserAgent()
+    private function getUserAgent(): string
     {
         return 'unitpay-php-sdk/' . self::VERSION . ' php/' . PHP_VERSION;
     }
@@ -1224,11 +1133,10 @@ class UnitPay
     /**
      * JSON-фингерпринт для заголовка X-Unitpay-Client — машиночитаемая версия UA,
      * чтобы бэкенд не разбирал строку User-Agent регуляркой.
-     * @return string
      */
-    private function getClientHeader()
+    private function getClientHeader(): string
     {
-        return json_encode([
+        return (string) json_encode([
             'platform'    => 'php',
             'sdk_version' => self::VERSION,
             'php_version' => PHP_VERSION,
@@ -1239,7 +1147,7 @@ class UnitPay
      * Заголовки фингерпринта для header-каналов (api() и beacon Слоя B).
      * @return string[]
      */
-    private function fingerprintHeaders()
+    private function fingerprintHeaders(): array
     {
         return [
             'User-Agent: ' . $this->getUserAgent(),
@@ -1252,9 +1160,8 @@ class UnitPay
      * Мерчант оперирует только флагом — URL эндпоинта выводится из $domain, передавать его
      * не нужно. Полностью заглушается переменной окружения UNITPAY_SDK_TELEMETRY_DISABLE
      * (1/true/yes) без правки кода.
-     * @return $this
      */
-    public function enableTelemetry()
+    public function enableTelemetry(): self
     {
         $this->telemetryEnabled = true;
         return $this;
@@ -1266,9 +1173,8 @@ class UnitPay
      * таймаут 300 мс; шлёт только не-PII поля (sdk, php, error, method).
      * @param string $code одна из ERR_* констант
      * @param string $method имя метода или 'unknown'
-     * @return void
      */
-    private function reportTelemetry($code, $method)
+    private function reportTelemetry(string $code, string $method): void
     {
         if (!$this->telemetryEnabled) {
             return;
@@ -1294,10 +1200,10 @@ class UnitPay
      * Приводит float-параметры к локале-независимым десятичным строкам, чтобы подпись
      * и URL запроса совпадали на PHP <8.0 (где (string)$float учитывает LC_NUMERIC и в
      * локалях с запятой выдал бы "100,5"). Значения, не являющиеся float, проходят как есть.
-     * @param array $params
-     * @return array
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
      */
-    private static function stringifyFloats(array $params)
+    private static function stringifyFloats(array $params): array
     {
         foreach ($params as $key => $value) {
             if (is_float($value)) {
@@ -1313,31 +1219,25 @@ class UnitPay
      * (string) $float учитывает LC_NUMERIC на PHP <8.0 и в локалях с запятой выдал бы
      * "100,5", ломая совпадение подписи и URL. Используется совместно getSignature() и
      * stringifyFloats(), чтобы подпись и передаваемое значение имели одинаковый вид.
-     * @param float $value
-     * @return string
      */
-    private static function floatToString($value)
+    private static function floatToString(float $value): string
     {
         return rtrim(rtrim(sprintf('%.8F', $value), '0'), '.');
     }
 
     /**
      * Строит JSON-ответ об успехе, который Unitpay ожидает от обработчика.
-     * @param string $message
-     * @return string
      */
-    public function getSuccessHandlerResponse($message)
+    public function getSuccessHandlerResponse(string $message): string
     {
-        return json_encode(['result' => ['message' => $message]]);
+        return (string) json_encode(['result' => ['message' => $message]]);
     }
 
     /**
      * Строит JSON-ответ об ошибке, который Unitpay ожидает от обработчика.
-     * @param string $message
-     * @return string
      */
-    public function getErrorHandlerResponse($message)
+    public function getErrorHandlerResponse(string $message): string
     {
-        return json_encode(['error' => ['message' => $message]]);
+        return (string) json_encode(['error' => ['message' => $message]]);
     }
 }

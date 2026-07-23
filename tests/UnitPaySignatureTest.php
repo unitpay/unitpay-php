@@ -15,7 +15,7 @@ final class UnitPaySignatureTest extends TestCase
         $this->unitPay = new UnitPay('unitpay.ru', 'secret');
     }
 
-    public function testSignatureMatchesDocumentedFormula()
+    public function testSignatureMatchesDocumentedFormula(): void
     {
         // sha256( <значения, отсортированные ksort>{up}secretKey )
         $this->assertSame(
@@ -24,7 +24,7 @@ final class UnitPaySignatureTest extends TestCase
         );
     }
 
-    public function testSignatureIsIndependentOfKeyOrder()
+    public function testSignatureIsIndependentOfKeyOrder(): void
     {
         $this->assertSame(
             $this->unitPay->getSignature(['a' => '1', 'b' => '2']),
@@ -38,7 +38,7 @@ final class UnitPaySignatureTest extends TestCase
      * krsort/asort изменил бы этот хэш и сломал бы каждую боевую подпись с несколькими
      * параметрами — этот тест такое поймает.
      */
-    public function testSignaturePinsAscendingKeyOrder()
+    public function testSignaturePinsAscendingKeyOrder(): void
     {
         $this->assertSame(
             hash('sha256', 'pay{up}1{up}2{up}3{up}secret'),
@@ -46,7 +46,7 @@ final class UnitPaySignatureTest extends TestCase
         );
     }
 
-    public function testMethodIsPrependedToPayload()
+    public function testMethodIsPrependedToPayload(): void
     {
         $this->assertSame(
             hash('sha256', 'pay{up}1{up}secret'),
@@ -58,7 +58,7 @@ final class UnitPaySignatureTest extends TestCase
         );
     }
 
-    public function testCallerSuppliedSignatureKeysAreStripped()
+    public function testCallerSuppliedSignatureKeysAreStripped(): void
     {
         $this->assertSame(
             $this->unitPay->getSignature(['a' => '1']),
@@ -72,7 +72,7 @@ final class UnitPaySignatureTest extends TestCase
      * PHP <8, фатальная Error на PHP >=8). Не должен бросать исключение, а полученная
      * подпись должна совпадать с подписью без вредоносного ключа.
      */
-    public function testPhpIntMaxKeyIsStrippedAndSecretRetained()
+    public function testPhpIntMaxKeyIsStrippedAndSecretRetained(): void
     {
         $this->assertSame(
             $this->unitPay->getSignature(['a' => '1']),
@@ -85,7 +85,7 @@ final class UnitPaySignatureTest extends TestCase
      * предупреждение "Array to string conversion"; массив приводится к '', и проверка
      * просто не совпадает с легитимной подписью.
      */
-    public function testArrayValuedParamDoesNotEmitWarning()
+    public function testArrayValuedParamDoesNotEmitWarning(): void
     {
         set_error_handler(static function ($errno, $errstr) {
             throw new \RuntimeException($errstr, $errno);

@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 final class UnitPayApiTest extends TestCase
 {
-    public function testInitPaymentReturnsDecodedResponseViaInjectedTransport()
+    public function testInitPaymentReturnsDecodedResponseViaInjectedTransport(): void
     {
         $transport = static function () {
             return '{"result":{"receiptId":42}}';
@@ -27,7 +27,7 @@ final class UnitPayApiTest extends TestCase
         $this->assertSame(42, $response->result->receiptId);
     }
 
-    public function testRequestUrlCarriesMethodParamsAndSecret()
+    public function testRequestUrlCarriesMethodParamsAndSecret(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {
@@ -45,7 +45,7 @@ final class UnitPayApiTest extends TestCase
         $this->assertStringContainsString('my-secret', $captured);
     }
 
-    public function testRequestUrlUsesFlatParamsNotNested()
+    public function testRequestUrlUsesFlatParamsNotNested(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {
@@ -63,7 +63,7 @@ final class UnitPayApiTest extends TestCase
         $this->assertStringNotContainsString('params[', $captured);
     }
 
-    public function testPayoutRequestUrlUsesFlatParams()
+    public function testPayoutRequestUrlUsesFlatParams(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {
@@ -91,7 +91,7 @@ final class UnitPayApiTest extends TestCase
      * должны попадать в запрос api(), а не только в form(). Защита от регресса: раньше
      * api() строил URL только из аргумента $params и молча их терял.
      */
-    public function testCashItemsFromSetterAreSentByApi()
+    public function testCashItemsFromSetterAreSentByApi(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {
@@ -118,7 +118,7 @@ final class UnitPayApiTest extends TestCase
     }
 
     /** Явные параметры api() имеют приоритет над всем, что задано fluent-сеттерами. */
-    public function testExplicitApiParamOverridesAccumulatedParam()
+    public function testExplicitApiParamOverridesAccumulatedParam(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {
@@ -145,7 +145,7 @@ final class UnitPayApiTest extends TestCase
      * в следующий вызов на повторно используемом экземпляре (регресс: устаревший чек
      * cashItems или customerEmail иначе ушёл бы с несвязанным поздним заказом).
      */
-    public function testFluentSetterParamsDoNotBleedIntoNextApiCall()
+    public function testFluentSetterParamsDoNotBleedIntoNextApiCall(): void
     {
         $urls = [];
         $transport = static function ($url) use (&$urls) {
@@ -175,7 +175,7 @@ final class UnitPayApiTest extends TestCase
      * Параметры fluent-сеттеров очищаются только УСПЕШНЫМ вызовом api(). После сбоя
      * транспорта они сохраняются, чтобы повтор ушёл с тем же чеком, а не молча без него.
      */
-    public function testFluentSetterParamsAreRetainedAfterFailedApiCall()
+    public function testFluentSetterParamsAreRetainedAfterFailedApiCall(): void
     {
         $urls = [];
         $calls = 0;
@@ -202,7 +202,7 @@ final class UnitPayApiTest extends TestCase
         $this->assertStringContainsString('cashItems=', $urls[1]);
     }
 
-    public function testNonObjectResponseIsReportedAsTemporaryServerError()
+    public function testNonObjectResponseIsReportedAsTemporaryServerError(): void
     {
         $transport = static function () {
             return 'this is not json';
@@ -214,7 +214,7 @@ final class UnitPayApiTest extends TestCase
         $unitPay->api('getPayment', ['paymentId' => 1]);
     }
 
-    public function testUnsupportedMethodThrows()
+    public function testUnsupportedMethodThrows(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
             return '{"result":{}}';
@@ -225,7 +225,7 @@ final class UnitPayApiTest extends TestCase
         $unitPay->api('doesNotExist');
     }
 
-    public function testMissingRequiredParamThrows()
+    public function testMissingRequiredParamThrows(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
             return '{"result":{}}';
@@ -236,7 +236,7 @@ final class UnitPayApiTest extends TestCase
         $unitPay->api('initPayment', ['account' => 1]);
     }
 
-    public function testMissingSecretThrows()
+    public function testMissingSecretThrows(): void
     {
         $unitPay = new UnitPay('unitpay.test', null, static function () {
             return '{"result":{}}';
@@ -247,7 +247,7 @@ final class UnitPayApiTest extends TestCase
         $unitPay->api('getPayment', ['paymentId' => 1]);
     }
 
-    public function testPayoutMethodsAreSupportedAndValidateRequiredParams()
+    public function testPayoutMethodsAreSupportedAndValidateRequiredParams(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
             return '{"result":{}}';
@@ -276,7 +276,7 @@ final class UnitPayApiTest extends TestCase
     }
 
     /** Сбой транспорта — типизированное исключение, всё ещё перехватываемое как InvalidArgumentException. */
-    public function testTransportFailureThrowsTypedTransportException()
+    public function testTransportFailureThrowsTypedTransportException(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
             return false; // эмулируем сбой транспорта
@@ -292,7 +292,7 @@ final class UnitPayApiTest extends TestCase
     }
 
     /** Неподдерживаемый метод бросает типизированное исключение, всё ещё перехватываемое как UnexpectedValueException. */
-    public function testUnsupportedMethodThrowsTypedException()
+    public function testUnsupportedMethodThrowsTypedException(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
             return '{"result":{}}';
@@ -307,7 +307,7 @@ final class UnitPayApiTest extends TestCase
     }
 
     /** Методы уровня аккаунта могут переопределить ключ проекта ключом аккаунта (secretKey). */
-    public function testExplicitSecretKeyOverridesInstanceKey()
+    public function testExplicitSecretKeyOverridesInstanceKey(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {

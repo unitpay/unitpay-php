@@ -7,7 +7,7 @@ use PHPUnit\Framework\TestCase;
 
 final class CashItemTest extends TestCase
 {
-    public function testConstructorStoresRequiredFieldsAndFiscalDefaults()
+    public function testConstructorStoresRequiredFieldsAndFiscalDefaults(): void
     {
         $item = new CashItem('Coffee', 2, 150.5);
 
@@ -19,7 +19,7 @@ final class CashItemTest extends TestCase
         $this->assertSame(CashItem::PAYMENT_METHOD_PREPAYMENT_FULL, $item->getPaymentMethod());
     }
 
-    public function testConstructorAcceptsExplicitFiscalFields()
+    public function testConstructorAcceptsExplicitFiscalFields(): void
     {
         $item = new CashItem(
             'Service',
@@ -35,7 +35,7 @@ final class CashItemTest extends TestCase
         $this->assertSame(CashItem::PAYMENT_METHOD_PAYMENT_FULL, $item->getPaymentMethod());
     }
 
-    public function testOptionalGettersDefaultToNull()
+    public function testOptionalGettersDefaultToNull(): void
     {
         $item = new CashItem('X', 1, 1.0);
 
@@ -49,7 +49,7 @@ final class CashItemTest extends TestCase
         $this->assertNull($item->getPostText());
     }
 
-    public function testFluentSettersReturnSelfAndStoreValues()
+    public function testFluentSettersReturnSelfAndStoreValues(): void
     {
         $item = new CashItem('X', 1, 1.0);
 
@@ -70,7 +70,7 @@ final class CashItemTest extends TestCase
         $this->assertSame('after', $item->getPostText());
     }
 
-    public function testSetMarkQuantityStoresIntegerFraction()
+    public function testSetMarkQuantityStoresIntegerFraction(): void
     {
         $item = new CashItem('X', 1, 1.0);
 
@@ -79,7 +79,7 @@ final class CashItemTest extends TestCase
     }
 
     /** Нулевой знаменатель (или неположительная дробь) отклоняется, а не сохраняется молча. */
-    public function testSetMarkQuantityRejectsNonPositiveValues()
+    public function testSetMarkQuantityRejectsNonPositiveValues(): void
     {
         $item = new CashItem('X', 1, 1.0);
 
@@ -88,7 +88,7 @@ final class CashItemTest extends TestCase
     }
 
     /** Неположительный числитель отклоняется отдельной проверкой (не только знаменатель). */
-    public function testSetMarkQuantityRejectsNonPositiveNumerator()
+    public function testSetMarkQuantityRejectsNonPositiveNumerator(): void
     {
         $item = new CashItem('X', 1, 1.0);
 
@@ -97,35 +97,35 @@ final class CashItemTest extends TestCase
     }
 
     /** count должен быть положительным числом. */
-    public function testConstructorRejectsNonPositiveCount()
+    public function testConstructorRejectsNonPositiveCount(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 0, 10.0);
     }
 
     /** price должен быть неотрицательным. */
-    public function testConstructorRejectsNegativePrice()
+    public function testConstructorRejectsNegativePrice(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 1, -5.0);
     }
 
     /** Нечисловой count должен быть отклонён, а не проскочить проверку диапазона. */
-    public function testConstructorRejectsNonNumericCount()
+    public function testConstructorRejectsNonNumericCount(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 'abc', 10.0);
     }
 
     /** Нечисловой price должен быть отклонён, а не проскочить проверку диапазона. */
-    public function testConstructorRejectsNonNumericPrice()
+    public function testConstructorRejectsNonNumericPrice(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 1, 'xyz');
     }
 
     /** Числовые строки принимаются и нормализуются в int/float. */
-    public function testConstructorNormalizesNumericStrings()
+    public function testConstructorNormalizesNumericStrings(): void
     {
         $item = new CashItem('X', '3', '9.5');
 
@@ -134,7 +134,7 @@ final class CashItemTest extends TestCase
     }
 
     /** Дробные количества (весовые/объёмные товары) сохраняются, а не усекаются до int. */
-    public function testConstructorPreservesFractionalCount()
+    public function testConstructorPreservesFractionalCount(): void
     {
         $item = new CashItem('Cheese', 1.5, 500.0);
 

@@ -21,13 +21,16 @@ final class UnitPayFloatTest extends TestCase
         $this->unitPay = new UnitPay('unitpay.ru', 'secret');
     }
 
-    private function queryOf($url): array
+    /**
+     * @return array<string, mixed>
+     */
+    private function queryOf(string $url): array
     {
         parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
         return $q;
     }
 
-    public function testSignatureRendersFloatAsCanonicalDecimalString()
+    public function testSignatureRendersFloatAsCanonicalDecimalString(): void
     {
         $this->assertSame(
             hash('sha256', '100.5{up}secret'),
@@ -36,7 +39,7 @@ final class UnitPayFloatTest extends TestCase
     }
 
     /** Целый float («100.0») даёт «100» — то же, что каноническая строка, поэтому подпись совпадает независимо от типа. */
-    public function testWholeFloatMatchesCanonicalStringSignature()
+    public function testWholeFloatMatchesCanonicalStringSignature(): void
     {
         $this->assertSame(
             $this->unitPay->getSignature(['sum' => '100']),
@@ -44,7 +47,7 @@ final class UnitPayFloatTest extends TestCase
         );
     }
 
-    public function testFormRendersFloatSumAsCanonicalDecimalString()
+    public function testFormRendersFloatSumAsCanonicalDecimalString(): void
     {
         $q = $this->queryOf($this->unitPay->form('pk', 100.5, 'acc', 'desc'));
 
@@ -52,7 +55,7 @@ final class UnitPayFloatTest extends TestCase
     }
 
     /** Хвостовой ноль убирается: 100.0 в строке запроса становится «100», а не «100.00000000». */
-    public function testFormStripsTrailingZeroFromWholeFloatSum()
+    public function testFormStripsTrailingZeroFromWholeFloatSum(): void
     {
         $q = $this->queryOf($this->unitPay->form('pk', 100.0, 'acc', 'desc'));
 
@@ -64,7 +67,7 @@ final class UnitPayFloatTest extends TestCase
      * строку запроса. Регресс здесь (подписали float, отправили другое строковое представление)
      * сломал бы проверку подписи на бэкенде для любой дробной суммы.
      */
-    public function testFormSignatureCoversTheExactStringSumSentInQuery()
+    public function testFormSignatureCoversTheExactStringSumSentInQuery(): void
     {
         $q = $this->queryOf($this->unitPay->form('pk', 100.5, 'acc', 'desc'));
 
@@ -77,7 +80,7 @@ final class UnitPayFloatTest extends TestCase
         $this->assertSame($expected, $q['signature']);
     }
 
-    public function testApiRendersFloatSumAsCanonicalDecimalString()
+    public function testApiRendersFloatSumAsCanonicalDecimalString(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {

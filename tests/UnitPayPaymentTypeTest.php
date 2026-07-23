@@ -12,7 +12,7 @@ use UnitPay;
  */
 final class UnitPayPaymentTypeTest extends TestCase
 {
-    public function testPaymentTypeConstantsMatchPublishedCodes()
+    public function testPaymentTypeConstantsMatchPublishedCodes(): void
     {
         $this->assertSame('card', UnitPay::PAYMENT_TYPE_CARD);
         $this->assertSame('cardInvoice', UnitPay::PAYMENT_TYPE_CARD_INVOICE);
@@ -24,7 +24,7 @@ final class UnitPayPaymentTypeTest extends TestCase
     }
 
     /** Константа способа оплаты принимается как есть в качестве paymentType для initPayment. */
-    public function testConstantIsUsableAsInitPaymentType()
+    public function testConstantIsUsableAsInitPaymentType(): void
     {
         $captured = null;
         $transport = static function ($url) use (&$captured) {

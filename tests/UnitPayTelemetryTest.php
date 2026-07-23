@@ -35,7 +35,7 @@ final class UnitPayTelemetryTest extends TestCase
         return null;
     }
 
-    public function testApiSendsFingerprintHeaders()
+    public function testApiSendsFingerprintHeaders(): void
     {
         $calls = [];
         $unitPay = new UnitPay('unitpay.test', 'secret', $this->spy($calls));
@@ -52,7 +52,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertSame(PHP_VERSION, $decoded['php_version']);
     }
 
-    public function testTelemetryDisabledByDefaultSendsNoBeacon()
+    public function testTelemetryDisabledByDefaultSendsNoBeacon(): void
     {
         $calls = [];
         $unitPay = new UnitPay('unitpay.test', 'secret', $this->spy($calls));
@@ -64,7 +64,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertSame([], $calls);
     }
 
-    public function testEnabledTelemetryFiresBeaconWithFieldsAndShortTimeout()
+    public function testEnabledTelemetryFiresBeaconWithFieldsAndShortTimeout(): void
     {
         $calls = [];
         $unitPay = new UnitPay('unitpay.test', 'secret', $this->spy($calls));
@@ -86,7 +86,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertStringNotContainsString('secret', $calls[0]['url']);
     }
 
-    public function testEnvKillSwitchSuppressesBeacon()
+    public function testEnvKillSwitchSuppressesBeacon(): void
     {
         putenv('UNITPAY_SDK_TELEMETRY_DISABLE=1');
         try {
@@ -103,7 +103,7 @@ final class UnitPayTelemetryTest extends TestCase
         }
     }
 
-    public function testWrongSignatureHandlerEmitsBeaconWithMethod()
+    public function testWrongSignatureHandlerEmitsBeaconWithMethod(): void
     {
         $calls = [];
         $unitPay = new UnitPay('unitpay.test', 'secret', $this->spy($calls), [
@@ -121,7 +121,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertSame('pay', $q['method']);
     }
 
-    public function testMissingMethodHandlerEmitsUnknownMethod()
+    public function testMissingMethodHandlerEmitsUnknownMethod(): void
     {
         $calls = [];
         $unitPay = new UnitPay('unitpay.test', 'secret', $this->spy($calls), [], '1.2.3.4');
@@ -136,7 +136,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertSame('unknown', $q['method']);
     }
 
-    public function testApiUnreachableEmitsNoBeacon()
+    public function testApiUnreachableEmitsNoBeacon(): void
     {
         $calls = [];
         // Транспорт фейлит реальный запрос (false); любой beacon тоже попал бы в $calls.
@@ -156,7 +156,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertStringNotContainsString('/sdk/telemetry', $calls[0]);
     }
 
-    public function testTelemetryFailureNeverPropagates()
+    public function testTelemetryFailureNeverPropagates(): void
     {
         $throwing = static function () {
             throw new \RuntimeException('beacon down');

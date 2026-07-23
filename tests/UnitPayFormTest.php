@@ -8,13 +8,16 @@ use PHPUnit\Framework\TestCase;
 
 final class UnitPayFormTest extends TestCase
 {
-    private function queryOf($url)
+    /**
+     * @return array<string, mixed>
+     */
+    private function queryOf(string $url): array
     {
         parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
         return $q;
     }
 
-    public function testFormBuildsHostedPaymentUrl()
+    public function testFormBuildsHostedPaymentUrl(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
 
@@ -30,7 +33,7 @@ final class UnitPayFormTest extends TestCase
         $this->assertSame('ru', $q['locale']);
     }
 
-    public function testFormIncludesSignatureOverVitalParamsWhenSecretIsSet()
+    public function testFormIncludesSignatureOverVitalParamsWhenSecretIsSet(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
 
@@ -48,7 +51,7 @@ final class UnitPayFormTest extends TestCase
         );
     }
 
-    public function testFormThrowsWithoutSecret()
+    public function testFormThrowsWithoutSecret(): void
     {
         $unitPay = new UnitPay('unitpay.ru');
 
@@ -56,7 +59,7 @@ final class UnitPayFormTest extends TestCase
         $unitPay->form('pk', 100, 'acc', 'desc');
     }
 
-    public function testFormHonoursCurrencyAndLocaleOverrides()
+    public function testFormHonoursCurrencyAndLocaleOverrides(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
 
@@ -66,7 +69,7 @@ final class UnitPayFormTest extends TestCase
         $this->assertSame('en', $q['locale']);
     }
 
-    public function testChainedSettersLandInTheFormUrl()
+    public function testChainedSettersLandInTheFormUrl(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
         $unitPay->setBackUrl('https://shop.example/back')
@@ -86,7 +89,7 @@ final class UnitPayFormTest extends TestCase
      * form() очищает накопленные сеттерами параметры, поэтому повторно используемый
      * экземпляр не переносит backUrl/чек/покупателя предыдущего заказа в следующий вызов.
      */
-    public function testFormClearsAccumulatedParamsAfterCall()
+    public function testFormClearsAccumulatedParamsAfterCall(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
         $unitPay->setBackUrl('https://shop.example/back')
@@ -101,7 +104,7 @@ final class UnitPayFormTest extends TestCase
     }
 
     /** Подпись формы должна покрывать ТОЛЬКО четыре ключевых параметра, а не параметры сеттеров. */
-    public function testFormSignatureExcludesSetterParams()
+    public function testFormSignatureExcludesSetterParams(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
         $unitPay->setCustomerEmail('customer@example.com')
@@ -122,7 +125,7 @@ final class UnitPayFormTest extends TestCase
      * Слой A: form() добавляет машиночитаемый токен фингерпринта sdk (URL-safe,
      * major.minor PHP) — и он НЕ меняет подпись (стоит вне подписываемых параметров).
      */
-    public function testFormCarriesSdkTokenWithoutBreakingSignature()
+    public function testFormCarriesSdkTokenWithoutBreakingSignature(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret');
         $url = $unitPay->form('pub', 100, 'order-1', 'Desc');

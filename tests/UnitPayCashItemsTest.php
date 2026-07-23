@@ -12,9 +12,9 @@ final class UnitPayCashItemsTest extends TestCase
      * setCashItems() хранит в params base64(json(...)); единственный публичный способ
      * прочитать это обратно — через строку запроса формы, поэтому декодируем оттуда.
      *
-     * @return array
+     * @return array<int, array<string, mixed>>
      */
-    private function serializedItems(UnitPay $unitPay)
+    private function serializedItems(UnitPay $unitPay): array
     {
         $url = $unitPay->form('pk', 1, 'acc', 'desc');
         parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
@@ -22,7 +22,7 @@ final class UnitPayCashItemsTest extends TestCase
         return json_decode(base64_decode($q['cashItems']), true);
     }
 
-    public function testRequiredFieldsAreAlwaysSerialized()
+    public function testRequiredFieldsAreAlwaysSerialized(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
         $unitPay->setCashItems([
@@ -47,7 +47,7 @@ final class UnitPayCashItemsTest extends TestCase
         $this->assertSame('full_payment', $items[0]['paymentMethod']);
     }
 
-    public function testOptionalFieldsAreOmittedWhenNotSet()
+    public function testOptionalFieldsAreOmittedWhenNotSet(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
         $unitPay->setCashItems([new CashItem('X', 1, 10.0)]);
@@ -59,7 +59,7 @@ final class UnitPayCashItemsTest extends TestCase
         }
     }
 
-    public function testOptionalFieldsAreSerializedWhenSet()
+    public function testOptionalFieldsAreSerializedWhenSet(): void
     {
         $item = new CashItem('Y', 1, 10.5);
         $item->setSum(10.5)
@@ -86,7 +86,7 @@ final class UnitPayCashItemsTest extends TestCase
         $this->assertSame('post', $items[0]['post_text']);
     }
 
-    public function testMultipleItemsKeepTheirOrder()
+    public function testMultipleItemsKeepTheirOrder(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
         $unitPay->setCashItems([
@@ -105,7 +105,7 @@ final class UnitPayCashItemsTest extends TestCase
      * Имя не в UTF-8 (например, из Windows-1251) обрушивает json_encode; setCashItems()
      * бросает исключение вместо тихой отправки пустого чека.
      */
-    public function testSetCashItemsThrowsOnNonUtf8Name()
+    public function testSetCashItemsThrowsOnNonUtf8Name(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
 

@@ -15,7 +15,7 @@ final class UnitPayResponseTest extends TestCase
         $this->unitPay = new UnitPay('unitpay.ru', 'secret');
     }
 
-    public function testSuccessHandlerResponseShape()
+    public function testSuccessHandlerResponseShape(): void
     {
         $this->assertSame(
             '{"result":{"message":"ok"}}',
@@ -23,7 +23,7 @@ final class UnitPayResponseTest extends TestCase
         );
     }
 
-    public function testErrorHandlerResponseShape()
+    public function testErrorHandlerResponseShape(): void
     {
         $this->assertSame(
             '{"error":{"message":"bad"}}',

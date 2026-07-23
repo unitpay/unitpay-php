@@ -15,11 +15,11 @@ final class UnitPayHandlerTest extends TestCase
     /**
      * Строит массив вебхука с корректной подписью его параметров.
      *
-     * @param string $method
-     * @param array  $overrides параметры для добавления/переопределения перед подписью
-     * @return array{method: string, params: array}
+     * @param string               $method
+     * @param array<string, mixed> $overrides параметры для добавления/переопределения перед подписью
+     * @return array{method: string, params: array<string, mixed>}
      */
-    private function validRequest($method = 'pay', array $overrides = [])
+    private function validRequest(string $method = 'pay', array $overrides = []): array
     {
         $params = array_merge([
             'account'       => '42',
@@ -35,22 +35,28 @@ final class UnitPayHandlerTest extends TestCase
         return ['method' => $method, 'params' => $params];
     }
 
-    private function sign(array $params, $method)
+    /**
+     * @param array<array-key, mixed> $params
+     */
+    private function sign(array $params, string $method): string
     {
         return (new UnitPay('unitpay.ru', self::SECRET))->getSignature($params, $method);
     }
 
-    private function handler(array $request, $ip = self::ALLOWED_IP, $secret = self::SECRET)
+    /**
+     * @param array<string, mixed> $request
+     */
+    private function handler(array $request, string $ip = self::ALLOWED_IP, ?string $secret = self::SECRET): UnitPay
     {
         return new UnitPay('unitpay.ru', $secret, null, $request, $ip);
     }
 
-    public function testValidSignatureAndAllowedIpPass()
+    public function testValidSignatureAndAllowedIpPass(): void
     {
         $this->assertTrue($this->handler($this->validRequest('pay'))->checkHandlerRequest());
     }
 
-    public function testTamperedParamsAreRejected()
+    public function testTamperedParamsAreRejected(): void
     {
         $request = $this->validRequest('pay');
         $request['params']['orderSum'] = '0.01'; // изменено после подписи
@@ -60,35 +66,35 @@ final class UnitPayHandlerTest extends TestCase
         $this->handler($request)->checkHandlerRequest();
     }
 
-    public function testDisallowedIpIsRejected()
+    public function testDisallowedIpIsRejected(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('IP address Error');
         $this->handler($this->validRequest('pay'), '8.8.8.8')->checkHandlerRequest();
     }
 
-    public function testEmptySecretIsRejected()
+    public function testEmptySecretIsRejected(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('SecretKey is null');
         $this->handler($this->validRequest('pay'), self::ALLOWED_IP, null)->checkHandlerRequest();
     }
 
-    public function testMissingMethodIsRejected()
+    public function testMissingMethodIsRejected(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Method is null');
         $this->handler(['params' => ['x' => '1']])->checkHandlerRequest();
     }
 
-    public function testMissingParamsIsRejected()
+    public function testMissingParamsIsRejected(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Params is null');
         $this->handler(['method' => 'pay'])->checkHandlerRequest();
     }
 
-    public function testUnsupportedPartnerMethodIsRejected()
+    public function testUnsupportedPartnerMethodIsRejected(): void
     {
         $this->expectException(UnexpectedValueException::class);
         $this->expectExceptionMessage('Method is not supported');
@@ -100,7 +106,7 @@ final class UnitPayHandlerTest extends TestCase
      * который шлёт Unitpay (method = check | pay | preauth | error). Должно проходить
      * проверку, а не отклоняться как неподдерживаемое.
      */
-    public function testPreauthPartnerMethodIsSupported()
+    public function testPreauthPartnerMethodIsSupported(): void
     {
         $request = $this->validRequest('preauth', ['isPreauth' => '1']);
 
@@ -114,7 +120,7 @@ final class UnitPayHandlerTest extends TestCase
      * Нестроковая подпись (например, массив, подсунутый через $_GET) должна быть
      * аккуратно отклонена как "Wrong signature", а не приводить к TypeError.
      */
-    public function testArraySignatureIsRejectedCleanly()
+    public function testArraySignatureIsRejectedCleanly(): void
     {
         $request = $this->validRequest('pay');
         $request['params']['signature'] = ['not', 'a', 'string'];
@@ -128,7 +134,7 @@ final class UnitPayHandlerTest extends TestCase
      * Подделанный params[PHP_INT_MAX] не должен ломать проверку и должен проходить
      * её корректно (ключ убирается и при подписи, и при проверке).
      */
-    public function testPhpIntMaxKeyInParamsDoesNotBreakVerification()
+    public function testPhpIntMaxKeyInParamsDoesNotBreakVerification(): void
     {
         $params = [
             'account'       => '42',
@@ -143,7 +149,7 @@ final class UnitPayHandlerTest extends TestCase
         $this->assertTrue($this->handler($request)->checkHandlerRequest());
     }
 
-    public function testSetAllowedIpsOverridesTheDefaultAllowlist()
+    public function testSetAllowedIpsOverridesTheDefaultAllowlist(): void
     {
         $customIp = '203.0.113.7'; // TEST-NET-3, нет в списке по умолчанию
         $unitPay = $this->handler($this->validRequest('pay'), $customIp);
@@ -153,7 +159,7 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /** 127.0.0.1 по умолчанию НЕ доверенный: за прокси на том же хосте он обнулил бы проверку IP. */
-    public function testLocalhostIsRejectedByDefault()
+    public function testLocalhostIsRejectedByDefault(): void
     {
         $unitPay = $this->handler($this->validRequest('pay'), '127.0.0.1');
 
@@ -162,7 +168,7 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /** setAllowedIps принимает CIDR-подсети, а не только точные IP. */
-    public function testCidrAllowlistMatchesAddressInRange()
+    public function testCidrAllowlistMatchesAddressInRange(): void
     {
         $unitPay = $this->handler($this->validRequest('pay'), '203.0.113.55');
         $unitPay->setAllowedIps(['203.0.113.0/24']);
@@ -170,7 +176,7 @@ final class UnitPayHandlerTest extends TestCase
         $this->assertTrue($unitPay->checkHandlerRequest());
     }
 
-    public function testCidrAllowlistRejectsAddressOutOfRange()
+    public function testCidrAllowlistRejectsAddressOutOfRange(): void
     {
         $unitPay = $this->handler($this->validRequest('pay'), '203.0.114.1');
         $unitPay->setAllowedIps(['203.0.113.0/24']);
@@ -180,7 +186,7 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /** Сопоставление CIDR работает и для IPv6 (бинарное сравнение через inet_pton). */
-    public function testCidrAllowlistMatchesIpv6InRange()
+    public function testCidrAllowlistMatchesIpv6InRange(): void
     {
         $unitPay = $this->handler($this->validRequest('pay'), '2001:db8::1');
         $unitPay->setAllowedIps(['2001:db8::/32']);
@@ -189,7 +195,7 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /** До первой успешной проверки геттеры проверенных данных возвращают null. */
-    public function testHandlerGettersAreNullBeforeVerification()
+    public function testHandlerGettersAreNullBeforeVerification(): void
     {
         $unitPay = $this->handler($this->validRequest('pay'));
 
@@ -198,7 +204,7 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /** После успешной проверки getHandlerParams() отдаёт именно проверенные параметры вебхука. */
-    public function testGetHandlerParamsReturnsVerifiedParams()
+    public function testGetHandlerParamsReturnsVerifiedParams(): void
     {
         $request = $this->validRequest('pay');
         $unitPay = $this->handler($request);
@@ -209,7 +215,7 @@ final class UnitPayHandlerTest extends TestCase
     }
 
     /** Типизированное исключение, всё ещё наследующее исторический SPL-тип + маркерный интерфейс. */
-    public function testSignatureFailureThrowsTypedExceptionStillCatchableAsInvalidArgument()
+    public function testSignatureFailureThrowsTypedExceptionStillCatchableAsInvalidArgument(): void
     {
         $request = $this->validRequest('pay');
         $request['params']['orderSum'] = '0.01'; // изменено после подписи

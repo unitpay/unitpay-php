@@ -18,27 +18,27 @@ final class UnitpayIpAllowlistTest extends TestCase
         return new UnitpayIpAllowlist(['31.186.100.49', '203.0.113.0/24', '2001:db8::/32']);
     }
 
-    public function testExactIpv4AddressMatches()
+    public function testExactIpv4AddressMatches(): void
     {
         $this->assertTrue($this->matcher()->contains('31.186.100.49'));
     }
 
-    public function testUnlistedIpv4AddressDoesNotMatch()
+    public function testUnlistedIpv4AddressDoesNotMatch(): void
     {
         $this->assertFalse($this->matcher()->contains('8.8.8.8'));
     }
 
-    public function testAddressInsideIpv4CidrMatches()
+    public function testAddressInsideIpv4CidrMatches(): void
     {
         $this->assertTrue($this->matcher()->contains('203.0.113.55'));
     }
 
-    public function testAddressOutsideIpv4CidrDoesNotMatch()
+    public function testAddressOutsideIpv4CidrDoesNotMatch(): void
     {
         $this->assertFalse($this->matcher()->contains('203.0.114.1'));
     }
 
-    public function testAddressInsideIpv6CidrMatches()
+    public function testAddressInsideIpv6CidrMatches(): void
     {
         $this->assertTrue($this->matcher()->contains('2001:db8::1'));
     }
@@ -47,7 +47,7 @@ final class UnitpayIpAllowlistTest extends TestCase
      * Точная запись IPv6 матчится вне зависимости от текстовой формы (регистр, сжатие):
      * сравнение идёт по упакованному in_addr, а не по строке.
      */
-    public function testExactIpv6MatchesRegardlessOfTextualForm()
+    public function testExactIpv6MatchesRegardlessOfTextualForm(): void
     {
         $upper = new UnitpayIpAllowlist(['2001:DB8::1']);
         $this->assertTrue($upper->contains('2001:db8::1'));
@@ -57,7 +57,7 @@ final class UnitpayIpAllowlistTest extends TestCase
     }
 
     /** Некорректный клиентский IP не должен приводить к ложному совпадению. */
-    public function testInvalidClientIpDoesNotMatch()
+    public function testInvalidClientIpDoesNotMatch(): void
     {
         $this->assertFalse($this->matcher()->contains('not-an-ip'));
     }
@@ -66,7 +66,7 @@ final class UnitpayIpAllowlistTest extends TestCase
      * IPv4-клиент против исключительно IPv6-подсети: inet_pton даёт in_addr разной
      * длины, поэтому сравнение должно аккуратно провалиться, а не сматчиться по ошибке.
      */
-    public function testIpv4ClientAgainstIpv6OnlySubnetDoesNotMatch()
+    public function testIpv4ClientAgainstIpv6OnlySubnetDoesNotMatch(): void
     {
         $matcher = new UnitpayIpAllowlist(['2001:db8::/32']);
 
@@ -74,7 +74,7 @@ final class UnitpayIpAllowlistTest extends TestCase
     }
 
     /** Префикс длиннее самого адреса (/33 для IPv4) не может сматчить ничего. */
-    public function testPrefixWiderThanAddressDoesNotMatch()
+    public function testPrefixWiderThanAddressDoesNotMatch(): void
     {
         $matcher = new UnitpayIpAllowlist(['203.0.113.0/33']);
 
@@ -82,7 +82,7 @@ final class UnitpayIpAllowlistTest extends TestCase
     }
 
     /** Граница подсети /25: адрес выше верхней границы диапазона не попадает. */
-    public function testCidrBoundaryIsRespected()
+    public function testCidrBoundaryIsRespected(): void
     {
         $matcher = new UnitpayIpAllowlist(['77.75.153.0/25']);
 
@@ -92,14 +92,14 @@ final class UnitpayIpAllowlistTest extends TestCase
 
     // --- parseWebhooksFeed() ---------------------------------------------------
 
-    public function testParseWebhooksFeedReturnsDedupedList()
+    public function testParseWebhooksFeedReturnsDedupedList(): void
     {
         $body = json_encode(['webhooks' => ['1.1.1.1', '1.1.1.1', '2.2.2.2']]);
 
         $this->assertSame(['1.1.1.1', '2.2.2.2'], UnitpayIpAllowlist::parseWebhooksFeed($body));
     }
 
-    public function testParseWebhooksFeedKeepsOnlyValidEntries()
+    public function testParseWebhooksFeedKeepsOnlyValidEntries(): void
     {
         $body = json_encode(['webhooks' => ['203.0.113.0/24', 'garbage', '2001:db8::1']]);
 
@@ -109,11 +109,14 @@ final class UnitpayIpAllowlistTest extends TestCase
     /**
      * @dataProvider unusableFeeds
      */
-    public function testParseWebhooksFeedReturnsNullForUnusableInput(string $body)
+    public function testParseWebhooksFeedReturnsNullForUnusableInput(string $body): void
     {
         $this->assertNull(UnitpayIpAllowlist::parseWebhooksFeed($body));
     }
 
+    /**
+     * @return array<string, array{0: string}>
+     */
     public function unusableFeeds(): array
     {
         return [
