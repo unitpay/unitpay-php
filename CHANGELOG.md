@@ -2,6 +2,7 @@
 
 ### v2.1.0
 
+* Телеметрия: пассивный анонимный фингерпринт версии (заголовки `User-Agent` и `X-Unitpay-Client` в `api()`, параметр `sdk` в URL `form()`) — самоидентификация SDK без дополнительных сетевых запросов и без PII; плюс опциональная (`enableTelemetry()`, по умолчанию выключена) best-effort отправка пре-флайт ошибок (неверная подпись, IP не в списке, нет обязательных параметров) на выводимый из `$domain` эндпоинт: шлёт только `sdk/php/error/method`, таймаут 300 мс, никогда не влияет на платёжный поток; глушится переменной окружения `UNITPAY_SDK_TELEMETRY_DISABLE=1`. Добавлена константа `UnitPay::VERSION`
 * `CashItem`: справочники 54-ФЗ синхронизированы с бэкендом:
   * Добавлены ставки НДС: vat5, vat7, vat22 и расчётные vat105, vat107, vat110, vat120, vat122
   * Добавлены признаки предмета расчёта: payment_2, deposit, expense, pension_insurance_ip, pension_insurance, medical_insurance_ip, medical_insurance, social_insurance, casino_payment, issuance_bank, commodity_without_mark, commodity_mark

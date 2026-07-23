@@ -345,6 +345,37 @@ if (isset($response->result->message)) {
 Note: `confirmPayment` and `cancelPayment` return a top-level `message`
 (`$response->message`), not `$response->result->message`.
 
+## Telemetry
+
+The SDK reports a small, **anonymous** version fingerprint so Unitpay can see
+which SDK/PHP versions are in the field. It never sends secrets, amounts, or
+customer data.
+
+**Passive fingerprint (always on).** Standard SDK self-identification, like any
+User-Agent — it adds **no extra network calls**:
+
+* `api()` requests carry a `User-Agent: unitpay-php-sdk/<ver> php/<ver>` header
+  and an `X-Unitpay-Client` JSON header with the same facts.
+* `form()` URLs carry an `sdk=php_<ver>_<major.minor>` query parameter (outside
+  the signature — it does not affect it).
+
+**Opt-in error telemetry (off by default).** A best-effort beacon that reports
+only *pre-flight* validation errors the backend can't otherwise see (bad
+signature, disallowed IP, missing params). Enable it with a single flag — no URL
+to configure, the endpoint is derived from your `$domain`:
+
+```php
+$unitpay = new UnitPay($domain, $secretKey);
+$unitpay->enableTelemetry(); // opt-in; sends only: sdk, php, error code, method
+```
+
+It fires a 300 ms best-effort `GET` and never blocks or breaks your payment flow.
+To disable it regardless of code (e.g. in a locked-down environment), set:
+
+```sh
+UNITPAY_SDK_TELEMETRY_DISABLE=1
+```
+
 ## Installation
 
 ### Composer (recommended)
