@@ -882,21 +882,32 @@ class UnitPay
      * а не оператором '@' (который запрещён правилами QA) — иначе это предупреждение
      * записало бы в лог URL с секретом.
      * @param string $url
+     * @param string[] $headers HTTP-заголовки формата "Имя: значение" (фингерпринт Слоя A / beacon).
+     * @param int|null $timeoutMs жёсткий таймаут в мс (beacon Слоя B); null — обычные таймауты api().
      * @return string|false
      */
-    protected function httpGet($url)
+    protected function httpGet($url, array $headers = [], $timeoutMs = null)
     {
         if ($this->transport !== null) {
-            return call_user_func($this->transport, $url);
+            return call_user_func($this->transport, $url, $headers, $timeoutMs);
         }
 
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_TIMEOUT        => 10,
-            ]);
+            $opts = [CURLOPT_RETURNTRANSFER => true];
+            if ($timeoutMs !== null) {
+                // Миллисекундные таймауты + NOSIGNAL для best-effort beacon Слоя B.
+                $opts[CURLOPT_NOSIGNAL] = true;
+                $opts[CURLOPT_CONNECTTIMEOUT_MS] = $timeoutMs;
+                $opts[CURLOPT_TIMEOUT_MS] = $timeoutMs;
+            } else {
+                $opts[CURLOPT_CONNECTTIMEOUT] = 5;
+                $opts[CURLOPT_TIMEOUT] = 10;
+            }
+            if ($headers !== []) {
+                $opts[CURLOPT_HTTPHEADER] = $headers;
+            }
+            curl_setopt_array($ch, $opts);
             $body = curl_exec($ch);
             if (\PHP_VERSION_ID < 80000) {
                 curl_close($ch);
@@ -904,7 +915,11 @@ class UnitPay
             return $body;
         }
 
-        $context = stream_context_create(['http' => ['timeout' => 10]]);
+        $http = ['timeout' => $timeoutMs !== null ? $timeoutMs / 1000 : 10];
+        if ($headers !== []) {
+            $http['header'] = implode("\r\n", $headers);
+        }
+        $context = stream_context_create(['http' => $http]);
         set_error_handler(static function () {
             return true;
         });
@@ -1076,7 +1091,7 @@ class UnitPay
             PHP_QUERY_RFC3986
         );
 
-        $response = json_decode($this->httpGet($requestUrl));
+        $response = json_decode($this->httpGet($requestUrl, $this->fingerprintHeaders()));
         if (!is_object($response)) {
             throw new UnitpayTransportException('Temporary server error. Please try again later.');
         }
@@ -1164,6 +1179,42 @@ class UnitPay
     private function getSdkToken()
     {
         return 'php_' . self::VERSION . '_' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+    }
+
+    /**
+     * Строка самоидентификации SDK для заголовка User-Agent (полная версия PHP —
+     * заголовок невидим для покупателя, полезен для диагностики).
+     * @return string
+     */
+    private function getUserAgent()
+    {
+        return 'unitpay-php-sdk/' . self::VERSION . ' php/' . PHP_VERSION;
+    }
+
+    /**
+     * JSON-фингерпринт для заголовка X-Unitpay-Client — машиночитаемая версия UA,
+     * чтобы бэкенд не разбирал строку User-Agent регуляркой.
+     * @return string
+     */
+    private function getClientHeader()
+    {
+        return json_encode([
+            'platform'    => 'php',
+            'sdk_version' => self::VERSION,
+            'php_version' => PHP_VERSION,
+        ]);
+    }
+
+    /**
+     * Заголовки фингерпринта для header-каналов (api() и beacon Слоя B).
+     * @return string[]
+     */
+    private function fingerprintHeaders()
+    {
+        return [
+            'User-Agent: ' . $this->getUserAgent(),
+            'X-Unitpay-Client: ' . $this->getClientHeader(),
+        ];
     }
 
     /**
