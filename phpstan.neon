@@ -1,10 +1,4 @@
 parameters:
-    # Level 6: raised from 5 once UnitPay.php gained native type declarations
-    # (params, returns, typed properties — see F014 in the tech-debt audit). Level 7+
-    # would flag httpGet()'s string|false via curl_exec's string|bool stub, which
-    # only a code restructure (direct curl_setopt) or a looser contract would satisfy —
-    # deliberately not pursued. Money/quantity params stay untyped by design (docblock
-    # unions); declare(strict_types=1) is still deferred.
     level: 6
     paths:
         - UnitPay.php
