@@ -912,15 +912,17 @@ class UnitPay
 
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
-            $opts = [CURLOPT_RETURNTRANSFER => true];
+            $opts = [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT        => 10,
+            ];
             if ($timeoutMs !== null) {
-                // Миллисекундные таймауты + NOSIGNAL для best-effort beacon Слоя B.
+                // Миллисекундные таймауты + NOSIGNAL для best-effort beacon Слоя B (заменяют секундные).
+                unset($opts[CURLOPT_CONNECTTIMEOUT], $opts[CURLOPT_TIMEOUT]);
                 $opts[CURLOPT_NOSIGNAL] = true;
                 $opts[CURLOPT_CONNECTTIMEOUT_MS] = $timeoutMs;
                 $opts[CURLOPT_TIMEOUT_MS] = $timeoutMs;
-            } else {
-                $opts[CURLOPT_CONNECTTIMEOUT] = 5;
-                $opts[CURLOPT_TIMEOUT] = 10;
             }
             if ($headers !== []) {
                 $opts[CURLOPT_HTTPHEADER] = $headers;
