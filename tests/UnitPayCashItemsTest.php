@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 final class UnitPayCashItemsTest extends TestCase
 {
     /**
-     * setCashItems() хранит в params base64(json(...)); единственный публичный способ
-     * прочитать это обратно — через строку запроса формы, поэтому декодируем оттуда.
+     * setCashItems() stores base64(json(...)) in params; the only public way to read
+     * it back is via the form's query string, so we decode it from there.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -102,8 +102,8 @@ final class UnitPayCashItemsTest extends TestCase
     }
 
     /**
-     * Имя не в UTF-8 (например, из Windows-1251) обрушивает json_encode; setCashItems()
-     * бросает исключение вместо тихой отправки пустого чека.
+     * A non-UTF-8 name (e.g. from Windows-1251) breaks json_encode; setCashItems()
+     * throws instead of silently sending an empty receipt.
      */
     public function testSetCashItemsThrowsOnNonUtf8Name(): void
     {

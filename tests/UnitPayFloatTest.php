@@ -6,10 +6,10 @@ use UnitPay;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Локале-независимая обработка float в подписи и URL (getSignature() ветка is_float,
- * floatToString(), stringifyFloats()). Инвариант: подпись строится над теми же
- * десятичными строками, что уходят в строку запроса, поэтому проверка на бэкенде совпадает
- * даже в локали с запятой как десятичным разделителем.
+ * Locale-independent float handling in the signature and URL (the is_float branch of
+ * getSignature(), floatToString(), stringifyFloats()). Invariant: the signature is built
+ * over the same decimal strings that go into the query string, so backend verification
+ * matches even in a locale that uses a comma as the decimal separator.
  */
 final class UnitPayFloatTest extends TestCase
 {
@@ -38,7 +38,7 @@ final class UnitPayFloatTest extends TestCase
         );
     }
 
-    /** Целый float («100.0») даёт «100» — то же, что каноническая строка, поэтому подпись совпадает независимо от типа. */
+    /** A whole float ("100.0") yields "100" — the same as the canonical string, so the signature matches regardless of type. */
     public function testWholeFloatMatchesCanonicalStringSignature(): void
     {
         $this->assertSame(
@@ -54,7 +54,7 @@ final class UnitPayFloatTest extends TestCase
         $this->assertSame('100.5', $q['sum']);
     }
 
-    /** Хвостовой ноль убирается: 100.0 в строке запроса становится «100», а не «100.00000000». */
+    /** The trailing zero is stripped: 100.0 becomes "100" in the query string, not "100.00000000". */
     public function testFormStripsTrailingZeroFromWholeFloatSum(): void
     {
         $q = $this->queryOf($this->unitPay->form('pk', 100.0, 'acc', 'desc'));
@@ -63,9 +63,9 @@ final class UnitPayFloatTest extends TestCase
     }
 
     /**
-     * Ключевой инвариант: подпись формы построена над той же строкой sum, что уходит в
-     * строку запроса. Регресс здесь (подписали float, отправили другое строковое представление)
-     * сломал бы проверку подписи на бэкенде для любой дробной суммы.
+     * Key invariant: the form signature is built over the same sum string that goes into
+     * the query string. A regression here (signing the float, sending a different string
+     * representation) would break backend signature verification for any fractional sum.
      */
     public function testFormSignatureCoversTheExactStringSumSentInQuery(): void
     {

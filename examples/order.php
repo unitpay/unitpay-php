@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Типовые данные заказа для примеров. Дополняет config.php (настройки подключения):
- * примеры с оплатой подключают оба файла.
+ * Sample order data for the examples. Complements config.php (connection settings):
+ * the payment examples include both files.
  */
 
 $itemName = 'Iphone 6 Skin Cover';

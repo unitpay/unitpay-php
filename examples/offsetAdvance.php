@@ -3,9 +3,9 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Чек зачёта аванса (offsetAdvance): по ранней предоплате создаёт фискальный чек.
- * ВНИМАНИЕ: вызов создаёт чек, это не справочный метод только для чтения. API уровня кабинета:
- * аутентифицируется ключом КАБИНЕТА + login, переданными явно.
+ * Advance-offset receipt (offsetAdvance): creates a fiscal receipt for an earlier prepayment.
+ * WARNING: the call creates a receipt, it is not a read-only reference method. Account-level API:
+ * authenticates with the ACCOUNT key + login, passed explicitly.
  */
 
 require_once __DIR__ . '/config.php';

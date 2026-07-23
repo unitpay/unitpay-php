@@ -3,7 +3,7 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Подписки: список, информация, закрытие
+ * Subscriptions: list, info, close
  *
  * @link https://help.unitpay.ru/api/subscription-list
  * @link https://help.unitpay.ru/api/subscription-info
@@ -18,14 +18,14 @@ $unitpay = new UnitPay($domain, $secretKey);
 $subscriptionId = 12345;
 
 try {
-    // Активные подписки проекта (добавьте 'all' => 1, чтобы включить все статусы).
+    // The project's active subscriptions (add 'all' => 1 to include all statuses).
     $list = $unitpay->api('listSubscriptions', ['projectId' => $projectId]);
     var_dump($list->result ?? $list->error ?? $list);
 
     $info = $unitpay->api('getSubscription', ['subscriptionId' => $subscriptionId]);
     var_dump($info->result ?? $info->error ?? $info);
 
-    // Закрываем (прекращает списания, отвязывает карту — необратимо).
+    // Close it (stops charges, detaches the card — irreversible).
     $closed = $unitpay->api('closeSubscription', ['subscriptionId' => $subscriptionId]);
     if (isset($closed->result->message)) {
         print $closed->result->message;

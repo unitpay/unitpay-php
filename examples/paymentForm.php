@@ -1,10 +1,10 @@
 <?php
 
 /**
- * Платёжная форма на стороне Unitpay: form() строит URL на его платёжную страницу. Перед
- * form() можно в fluent-стиле прикрепить необязательные параметры — backUrl (куда
- * вернуть плательщика), контакт покупателя, фискальный чек (см. receipt.php). Эти
- * параметры подмешиваются в запрос и очищаются после успешного form().
+ * Unitpay-hosted payment form: form() builds a URL to its payment page. Before form()
+ * you can attach optional parameters in a fluent style — backUrl (where to return the
+ * payer), the customer's contact, a fiscal receipt (see receipt.php). These parameters
+ * are merged into the request and cleared after a successful form().
  *
  * @link https://help.unitpay.ru/payments/create-payment-easy
  */

@@ -86,8 +86,8 @@ final class UnitPayFormTest extends TestCase
     }
 
     /**
-     * form() очищает накопленные сеттерами параметры, поэтому повторно используемый
-     * экземпляр не переносит backUrl/чек/покупателя предыдущего заказа в следующий вызов.
+     * form() clears the setter-accumulated params, so a reused instance does not carry
+     * the previous order's backUrl/receipt/customer into the next call.
      */
     public function testFormClearsAccumulatedParamsAfterCall(): void
     {
@@ -103,7 +103,7 @@ final class UnitPayFormTest extends TestCase
         $this->assertArrayNotHasKey('customerEmail', $second);
     }
 
-    /** Подпись формы должна покрывать ТОЛЬКО четыре ключевых параметра, а не параметры сеттеров. */
+    /** The form signature must cover ONLY the four vital params, not the setter params. */
     public function testFormSignatureExcludesSetterParams(): void
     {
         $unitPay = new UnitPay('unitpay.ru', 'secret');
@@ -122,8 +122,8 @@ final class UnitPayFormTest extends TestCase
     }
 
     /**
-     * Слой A: form() добавляет машиночитаемый токен фингерпринта sdk (URL-safe,
-     * major.minor PHP) — и он НЕ меняет подпись (стоит вне подписываемых параметров).
+     * Layer A: form() adds a machine-readable sdk fingerprint token (URL-safe,
+     * PHP major.minor) — and it does NOT change the signature (it sits outside the signed params).
      */
     public function testFormCarriesSdkTokenWithoutBreakingSignature(): void
     {
@@ -135,7 +135,7 @@ final class UnitPayFormTest extends TestCase
             'php_' . UnitPay::VERSION . '_' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
             $q['sdk']
         );
-        // URL-safe: токен появляется в готовом URL дословно, без %-кодирования.
+        // URL-safe: the token appears in the final URL verbatim, without %-encoding.
         $this->assertStringContainsString('sdk=php_', $url);
 
         $expected = (new UnitPay('unitpay.test', 'secret'))->getSignature([

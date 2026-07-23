@@ -3,10 +3,10 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Справочные вызовы уровня кабинета (только для чтения): баланс, комиссии, курсы валют,
- * информация по BIN. Аутентифицируются ключом КАБИНЕТА + login, переданными явно, чтобы
- * переопределить ключ проекта из конструктора. getMethodsAvailable — уровня проекта и
- * использует ключ проекта (без login). Изменяющий данные offsetAdvance — в offsetAdvance.php.
+ * Read-only account-level reference calls: balance, commissions, currency rates,
+ * BIN info. They authenticate with the ACCOUNT key + login, passed explicitly to
+ * override the project key from the constructor. getMethodsAvailable is project-level
+ * and uses the project key (no login). The data-changing offsetAdvance is in offsetAdvance.php.
  *
  * @link https://help.unitpay.ru/api/balance
  * @link https://help.unitpay.ru/api/commissions
@@ -22,18 +22,18 @@ $unitpay = new UnitPay($domain, $secretKey);
 $account = ['login' => $login, 'secretKey' => $accountSecretKey];
 
 try {
-    // Баланс кабинета и сумма, доступная к выводу.
+    // Account balance and the amount available for withdrawal.
     var_dump($unitpay->api('getPartner', $account)->result ?? null);
 
-    // Комиссии эквайринга по проекту.
+    // Acquiring commissions for the project.
     var_dump($unitpay->api('getCommissions', $account + ['projectId' => $projectId])->result ?? null);
 
     var_dump($unitpay->api('getCurrencyCourses', $account)->result ?? null);
 
-    // BIN — первые 6 цифр номера карты.
+    // BIN — the first 6 digits of the card number.
     var_dump($unitpay->api('getBinInfo', $account + ['bin' => 424242])->result ?? null);
 
-    // Способы оплаты на проекте: ключ проекта, без login.
+    // Payment methods available on the project: project key, no login.
     var_dump($unitpay->api('getMethodsAvailable', ['projectId' => $projectId])->result ?? null);
 } catch (UnitpayExceptionInterface $e) {
     print 'SDK error: ' . $e->getMessage();

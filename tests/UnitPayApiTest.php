@@ -56,7 +56,7 @@ final class UnitPayApiTest extends TestCase
 
         $unitPay->api('getPayment', ['paymentId' => 555]);
 
-        // Unitpay принимает плоские параметры строки запроса с 05/2026 — без устаревшей вложенности params[...].
+        // Unitpay accepts flat query-string params since 05/2026 — no legacy params[...] nesting.
         $this->assertStringContainsString('paymentId=555', $captured);
         $this->assertStringContainsString('secretKey=my-secret', $captured);
         $this->assertStringNotContainsString('params%5B', $captured);
@@ -87,9 +87,9 @@ final class UnitPayApiTest extends TestCase
     }
 
     /**
-     * Параметры, накопленные fluent-сеттерами (setCashItems/setCustomerEmail/…),
-     * должны попадать в запрос api(), а не только в form(). Защита от регресса: раньше
-     * api() строил URL только из аргумента $params и молча их терял.
+     * Params accumulated by the fluent setters (setCashItems/setCustomerEmail/…) must
+     * reach the api() request, not just form(). Regression guard: api() used to build the
+     * URL only from the $params argument and silently drop them.
      */
     public function testCashItemsFromSetterAreSentByApi(): void
     {
@@ -117,7 +117,7 @@ final class UnitPayApiTest extends TestCase
         $this->assertSame('Coffee', $items[0]['name']);
     }
 
-    /** Явные параметры api() имеют приоритет над всем, что задано fluent-сеттерами. */
+    /** Explicit api() params take precedence over anything set by the fluent setters. */
     public function testExplicitApiParamOverridesAccumulatedParam(): void
     {
         $captured = null;
@@ -141,9 +141,9 @@ final class UnitPayApiTest extends TestCase
     }
 
     /**
-     * Параметры fluent-сеттеров очищаются успешным вызовом api() и не должны протекать
-     * в следующий вызов на повторно используемом экземпляре (регресс: устаревший чек
-     * cashItems или customerEmail иначе ушёл бы с несвязанным поздним заказом).
+     * Fluent-setter params are cleared by a successful api() call and must not leak into
+     * the next call on a reused instance (regression: a stale cashItems receipt or
+     * customerEmail would otherwise go out with an unrelated later order).
      */
     public function testFluentSetterParamsDoNotBleedIntoNextApiCall(): void
     {
@@ -163,7 +163,7 @@ final class UnitPayApiTest extends TestCase
             'paymentType' => 'card',
         ]);
 
-        // Второй вызов, без повторной установки чека/покупателя, должен быть чистым.
+        // The second call, without re-setting the receipt/customer, must be clean.
         $unitPay->api('getPayment', ['paymentId' => 555]);
 
         $this->assertStringContainsString('cashItems=', $urls[0]);
@@ -172,14 +172,15 @@ final class UnitPayApiTest extends TestCase
     }
 
     /**
-     * Параметры fluent-сеттеров очищаются только УСПЕШНЫМ вызовом api(). После сбоя
-     * транспорта они сохраняются, чтобы повтор ушёл с тем же чеком, а не молча без него.
+     * Fluent-setter params are cleared only by a SUCCESSFUL api() call. After a transport
+     * failure they are retained, so a retry goes out with the same receipt rather than
+     * silently without it.
      */
     public function testFluentSetterParamsAreRetainedAfterFailedApiCall(): void
     {
         $urls = [];
         $calls = 0;
-        // Первый вызов имитирует сбой транспорта (false), последующие — успех.
+        // The first call simulates a transport failure (false), later ones succeed.
         $transport = static function ($url) use (&$urls, &$calls) {
             $urls[] = $url;
             $calls++;
@@ -192,12 +193,12 @@ final class UnitPayApiTest extends TestCase
             $unitPay->api('getPayment', ['paymentId' => 1]);
             $this->fail('expected a transport exception on the first call');
         } catch (\UnitpayTransportException $e) {
-            // ожидаемо: транспорт вернул false
+            // expected: the transport returned false
         }
 
         $unitPay->api('getPayment', ['paymentId' => 2]);
 
-        // Чек уцелел после сбоя и ушёл с повтором.
+        // The receipt survived the failure and went out with the retry.
         $this->assertStringContainsString('cashItems=', $urls[0]);
         $this->assertStringContainsString('cashItems=', $urls[1]);
     }
@@ -232,7 +233,7 @@ final class UnitPayApiTest extends TestCase
         });
 
         $this->expectException(InvalidArgumentException::class);
-        // initPayment требует account, sum, projectId, paymentType
+        // initPayment requires account, sum, projectId, paymentType
         $unitPay->api('initPayment', ['account' => 1]);
     }
 
@@ -269,17 +270,17 @@ final class UnitPayApiTest extends TestCase
             } catch (UnexpectedValueException $e) {
                 $this->fail($method . ' is not in the allowlist');
             } catch (InvalidArgumentException $e) {
-                // каждый метод выплат сначала требует login
+                // each payout method requires login first
                 $this->assertStringContainsString('login', $e->getMessage());
             }
         }
     }
 
-    /** Сбой транспорта — типизированное исключение, всё ещё перехватываемое как InvalidArgumentException. */
+    /** A transport failure is a typed exception, still catchable as InvalidArgumentException. */
     public function testTransportFailureThrowsTypedTransportException(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
-            return false; // эмулируем сбой транспорта
+            return false; // simulate a transport failure
         });
 
         try {
@@ -291,7 +292,7 @@ final class UnitPayApiTest extends TestCase
         }
     }
 
-    /** Неподдерживаемый метод бросает типизированное исключение, всё ещё перехватываемое как UnexpectedValueException. */
+    /** An unsupported method throws a typed exception, still catchable as UnexpectedValueException. */
     public function testUnsupportedMethodThrowsTypedException(): void
     {
         $unitPay = new UnitPay('unitpay.test', 'secret', static function () {
@@ -306,7 +307,7 @@ final class UnitPayApiTest extends TestCase
         }
     }
 
-    /** Методы уровня аккаунта могут переопределить ключ проекта ключом аккаунта (secretKey). */
+    /** Account-level methods can override the project key with the account key (secretKey). */
     public function testExplicitSecretKeyOverridesInstanceKey(): void
     {
         $captured = null;

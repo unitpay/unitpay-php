@@ -3,7 +3,7 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Возврат платежа (полный или частичный)
+ * Payment refund (full or partial)
  *
  * @link https://help.unitpay.ru/api/payment-refund
  */
@@ -16,7 +16,7 @@ $unitpay = new UnitPay($domain, $secretKey);
 try {
     $response = $unitpay->api('refundPayment', [
         'paymentId' => 3403575,
-        // 'sum' => 100, // необязательно: частичный возврат; для полного не указывайте
+        // 'sum' => 100, // optional: partial refund; omit for a full refund
     ]);
 
     if (isset($response->result->message)) {

@@ -78,7 +78,7 @@ final class CashItemTest extends TestCase
         $this->assertSame(['numerator' => 1, 'denominator' => 3], $item->getMarkQuantity());
     }
 
-    /** Нулевой знаменатель (или неположительная дробь) отклоняется, а не сохраняется молча. */
+    /** A zero denominator (or a non-positive fraction) is rejected rather than silently stored. */
     public function testSetMarkQuantityRejectsNonPositiveValues(): void
     {
         $item = new CashItem('X', 1, 1.0);
@@ -87,7 +87,7 @@ final class CashItemTest extends TestCase
         $item->setMarkQuantity(1, 0);
     }
 
-    /** Неположительный числитель отклоняется отдельной проверкой (не только знаменатель). */
+    /** A non-positive numerator is rejected by a separate check (not just the denominator). */
     public function testSetMarkQuantityRejectsNonPositiveNumerator(): void
     {
         $item = new CashItem('X', 1, 1.0);
@@ -96,35 +96,35 @@ final class CashItemTest extends TestCase
         $item->setMarkQuantity(0, 3);
     }
 
-    /** count должен быть положительным числом. */
+    /** count must be a positive number. */
     public function testConstructorRejectsNonPositiveCount(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 0, 10.0);
     }
 
-    /** price должен быть неотрицательным. */
+    /** price must be non-negative. */
     public function testConstructorRejectsNegativePrice(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 1, -5.0);
     }
 
-    /** Нечисловой count должен быть отклонён, а не проскочить проверку диапазона. */
+    /** A non-numeric count must be rejected rather than slip past the range check. */
     public function testConstructorRejectsNonNumericCount(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 'abc', 10.0);
     }
 
-    /** Нечисловой price должен быть отклонён, а не проскочить проверку диапазона. */
+    /** A non-numeric price must be rejected rather than slip past the range check. */
     public function testConstructorRejectsNonNumericPrice(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new CashItem('X', 1, 'xyz');
     }
 
-    /** Числовые строки принимаются и нормализуются в int/float. */
+    /** Numeric strings are accepted and normalized to int/float. */
     public function testConstructorNormalizesNumericStrings(): void
     {
         $item = new CashItem('X', '3', '9.5');
@@ -133,7 +133,7 @@ final class CashItemTest extends TestCase
         $this->assertSame(9.5, $item->getPrice());
     }
 
-    /** Дробные количества (весовые/объёмные товары) сохраняются, а не усекаются до int. */
+    /** Fractional quantities (weight/volume goods) are preserved rather than truncated to int. */
     public function testConstructorPreservesFractionalCount(): void
     {
         $item = new CashItem('Cheese', 1.5, 500.0);

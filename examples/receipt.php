@@ -3,13 +3,13 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Фискальный чек по 54-ФЗ: позиции описываются объектами CashItem и прикрепляются к
- * платежу через setCashItems(). Чек уходит вместе со следующим вызовом form()/api() и
- * очищается после успешного вызова. Чтобы покупатель получил чек, укажите его контакт
- * (email и/или телефон) через setCustomerEmail()/setCustomerPhone().
+ * 54-FZ fiscal receipt: line items are described by CashItem objects and attached to
+ * the payment via setCashItems(). The receipt goes out with the next form()/api() call
+ * and is cleared after a successful call. For the customer to receive the receipt, set
+ * their contact (email and/or phone) via setCustomerEmail()/setCustomerPhone().
  *
- * Справочники ставок НДС (NDS_*), предметов расчёта (PAYMENT_OBJECT_*), способов
- * расчёта (PAYMENT_METHOD_*) и единиц измерения (MEASURE_*) — это константы CashItem.
+ * The dictionaries of VAT rates (NDS_*), payment objects (PAYMENT_OBJECT_*), payment
+ * methods (PAYMENT_METHOD_*) and units of measure (MEASURE_*) are CashItem constants.
  *
  * @link https://help.unitpay.ru/payments/create-payment
  */
@@ -20,8 +20,8 @@ require_once __DIR__ . '/../UnitPay.php';
 
 $unitpay = new UnitPay($domain, $secretKey);
 
-// Позиция 1: товар. Аргументы конструктора: name, count, price, nds, предмет расчёта,
-// способ расчёта. С 2026 бэкенд фискализирует vat20 как 22% — выбирайте по реальному чеку.
+// Line item 1: a commodity. Constructor args: name, count, price, nds, payment object,
+// payment method. Since 2026 the backend fiscalizes vat20 as 22% — pick per the real receipt.
 $item = new CashItem(
     $itemName,
     1,
@@ -30,10 +30,10 @@ $item = new CashItem(
     CashItem::PAYMENT_OBJECT_COMMODITY,
     CashItem::PAYMENT_METHOD_PAYMENT_FULL
 );
-// Необязательные поля сериализуются, только если заданы (напр. единица измерения):
+// Optional fields are serialized only when set (e.g. unit of measure):
 $item->setMeasure(CashItem::MEASURE_ITEM);
 
-// Позиция 2: услуга (доставка), без НДС.
+// Line item 2: a service (delivery), no VAT.
 $delivery = new CashItem(
     'Доставка',
     1,
@@ -44,7 +44,7 @@ $delivery = new CashItem(
 );
 
 try {
-    // Сумма платежа должна совпадать с суммой позиций чека: 900 + 150 = 1050.
+    // The payment sum must match the sum of the receipt line items: 900 + 150 = 1050.
     $response = $unitpay
         ->setCustomerEmail('customer@example.com')
         ->setCashItems([$item, $delivery])
@@ -57,7 +57,7 @@ try {
             'projectId'   => $projectId,
         ]);
 
-    // Тот же чек можно прикрепить и к платёжной форме:
+    // The same receipt can also be attached to the payment form:
     //   $url = $unitpay->setCashItems([$item, $delivery])
     //       ->form($publicId, 1050, $orderId, $orderDesc, $orderCurrency);
 
@@ -70,6 +70,6 @@ try {
         var_dump($response);
     }
 } catch (UnitpayExceptionInterface $e) {
-    // UnitpayValidationException, если имя позиции не в UTF-8 (json_encode вернёт false).
+    // UnitpayValidationException if a line-item name is not UTF-8 (json_encode returns false).
     print 'SDK error: ' . $e->getMessage();
 }

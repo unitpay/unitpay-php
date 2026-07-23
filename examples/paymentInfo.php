@@ -3,7 +3,7 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Информация о платеже
+ * Payment info
  *
  * @link https://help.unitpay.ru/payments/payment-info
  */

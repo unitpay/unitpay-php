@@ -6,10 +6,10 @@ use UnitpayIpAllowlist;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Прямые тесты сопоставления IP с белым списком. contains() критичен для безопасности, но до
- * сих пор проверялся только косвенно через checkHandlerRequest(); здесь фиксируем
- * граничные случаи (несовпадение семейств адресов, чрезмерная длина префикса,
- * некорректный клиентский IP), которые трудно выразить через полный путь обработчика.
+ * Direct tests of IP-to-allowlist matching. contains() is security-critical but has so
+ * far been exercised only indirectly through checkHandlerRequest(); here we pin down the
+ * edge cases (address-family mismatch, oversized prefix length, malformed client IP)
+ * that are hard to express through the full handler path.
  */
 final class UnitpayIpAllowlistTest extends TestCase
 {
@@ -44,8 +44,8 @@ final class UnitpayIpAllowlistTest extends TestCase
     }
 
     /**
-     * Точная запись IPv6 матчится вне зависимости от текстовой формы (регистр, сжатие):
-     * сравнение идёт по упакованному in_addr, а не по строке.
+     * An exact IPv6 entry matches regardless of textual form (case, compression):
+     * the comparison is over the packed in_addr, not the string.
      */
     public function testExactIpv6MatchesRegardlessOfTextualForm(): void
     {
@@ -56,15 +56,15 @@ final class UnitpayIpAllowlistTest extends TestCase
         $this->assertTrue($expanded->contains('2001:db8::1'));
     }
 
-    /** Некорректный клиентский IP не должен приводить к ложному совпадению. */
+    /** A malformed client IP must not produce a false match. */
     public function testInvalidClientIpDoesNotMatch(): void
     {
         $this->assertFalse($this->matcher()->contains('not-an-ip'));
     }
 
     /**
-     * IPv4-клиент против исключительно IPv6-подсети: inet_pton даёт in_addr разной
-     * длины, поэтому сравнение должно аккуратно провалиться, а не сматчиться по ошибке.
+     * An IPv4 client against an IPv6-only subnet: inet_pton yields in_addr of different
+     * lengths, so the comparison must fail cleanly rather than match by mistake.
      */
     public function testIpv4ClientAgainstIpv6OnlySubnetDoesNotMatch(): void
     {
@@ -73,7 +73,7 @@ final class UnitpayIpAllowlistTest extends TestCase
         $this->assertFalse($matcher->contains('203.0.113.55'));
     }
 
-    /** Префикс длиннее самого адреса (/33 для IPv4) не может сматчить ничего. */
+    /** A prefix longer than the address itself (/33 for IPv4) cannot match anything. */
     public function testPrefixWiderThanAddressDoesNotMatch(): void
     {
         $matcher = new UnitpayIpAllowlist(['203.0.113.0/33']);
@@ -81,7 +81,7 @@ final class UnitpayIpAllowlistTest extends TestCase
         $this->assertFalse($matcher->contains('203.0.113.5'));
     }
 
-    /** Граница подсети /25: адрес выше верхней границы диапазона не попадает. */
+    /** /25 subnet boundary: an address above the range's upper bound is not included. */
     public function testCidrBoundaryIsRespected(): void
     {
         $matcher = new UnitpayIpAllowlist(['77.75.153.0/25']);

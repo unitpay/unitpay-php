@@ -3,7 +3,7 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Интеграция через API
+ * API integration
  *
  * @link https://help.unitpay.ru/payments/create-payment
  */
@@ -15,8 +15,8 @@ require_once __DIR__ . '/../UnitPay.php';
 $unitpay = new UnitPay($domain, $secretKey);
 
 /**
- * Базовые параметры: account, desc, sum, currency, projectId, paymentType
- * paymentType — код способа оплаты из справочника (константы UnitPay::PAYMENT_TYPE_*):
+ * Base params: account, desc, sum, currency, projectId, paymentType
+ * paymentType is a payment method code from the reference (UnitPay::PAYMENT_TYPE_* constants):
  *   card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney.
  *
  * @link https://help.unitpay.ru/payments/create-payment
@@ -32,10 +32,10 @@ try {
         'projectId' => $projectId,
     ]);
 
-    // Ответ initPayment бывает трёх типов: redirect, invoice, response.
+    // The initPayment response comes in three types: redirect, invoice, response.
     switch ($response->result->type ?? null) {
         case 'redirect':
-            // paymentId — в $response->result->paymentId, сохраните у себя.
+            // paymentId is in $response->result->paymentId; save it on your side.
             if (isset($response->result->redirectUrl)) {
                 header('Location: ' . $response->result->redirectUrl);
                 exit;
@@ -44,7 +44,7 @@ try {
             break;
 
         case 'invoice':
-            // Помимо receiptUrl доступны $response->result->paymentId и ->invoiceId.
+            // Besides receiptUrl, $response->result->paymentId and ->invoiceId are available.
             if (isset($response->result->receiptUrl)) {
                 header('Location: ' . $response->result->receiptUrl);
                 exit;
@@ -53,12 +53,12 @@ try {
             break;
 
         case 'response':
-            // Без перенаправления (например, рекуррентное списание); статус — в ->statusUrl.
+            // No redirect (e.g. a recurring charge); the status is in ->statusUrl.
             print $response->result->message ?? '';
             break;
 
         default:
-            // Типа нет — как правило, ошибка уровня API.
+            // No type — usually an API-level error.
             if (isset($response->error->message)) {
                 print 'Error: ' . $response->error->message;
             } else {
@@ -66,6 +66,6 @@ try {
             }
     }
 } catch (UnitpayExceptionInterface $e) {
-    // Сбой на стороне SDK: сеть, отключённый allow_url_fopen, битый JSON и т.п.
+    // SDK-side failure: network, disabled allow_url_fopen, malformed JSON, etc.
     print 'SDK error: ' . $e->getMessage();
 }

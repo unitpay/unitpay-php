@@ -17,7 +17,7 @@ final class UnitPaySignatureTest extends TestCase
 
     public function testSignatureMatchesDocumentedFormula(): void
     {
-        // sha256( <значения, отсортированные ksort>{up}secretKey )
+        // sha256( <ksort-sorted values>{up}secretKey )
         $this->assertSame(
             hash('sha256', '1{up}secret'),
             $this->unitPay->getSignature(['a' => '1'])
@@ -33,10 +33,9 @@ final class UnitPaySignatureTest extends TestCase
     }
 
     /**
-     * Фиксирует НАПРАВЛЕНИЕ сортировки конкретным значением: ksort сортирует по ключу
-     * по возрастанию, поэтому ключи c,a,b дают значения 1,2,3. Рефакторинг на
-     * krsort/asort изменил бы этот хэш и сломал бы каждую боевую подпись с несколькими
-     * параметрами — этот тест такое поймает.
+     * Pins the sort DIRECTION with a concrete value: ksort sorts by key ascending, so
+     * keys c,a,b yield values 1,2,3. Refactoring to krsort/asort would change this hash
+     * and break every production signature with multiple params — this test catches that.
      */
     public function testSignaturePinsAscendingKeyOrder(): void
     {
@@ -67,10 +66,10 @@ final class UnitPaySignatureTest extends TestCase
     }
 
     /**
-     * Регресс-тест: подделанный params[PHP_INT_MAX] должен быть убран, чтобы не
-     * вытеснить автоматически добавляемый secretKey из хэша (подделываемая подпись на
-     * PHP <8, фатальная Error на PHP >=8). Не должен бросать исключение, а полученная
-     * подпись должна совпадать с подписью без вредоносного ключа.
+     * Regression test: a forged params[PHP_INT_MAX] must be stripped so it cannot push the
+     * automatically appended secretKey out of the hash (forgeable signature on PHP <8, a
+     * fatal Error on PHP >=8). It must not throw, and the resulting signature must match
+     * the signature without the malicious key.
      */
     public function testPhpIntMaxKeyIsStrippedAndSecretRetained(): void
     {
@@ -81,9 +80,9 @@ final class UnitPaySignatureTest extends TestCase
     }
 
     /**
-     * Подсунутое значение-массив (например, вебхук params[x][]=1) не должно вызывать
-     * предупреждение "Array to string conversion"; массив приводится к '', и проверка
-     * просто не совпадает с легитимной подписью.
+     * An injected array value (e.g. a webhook params[x][]=1) must not raise an
+     * "Array to string conversion" warning; the array is coerced to '', and verification
+     * simply does not match a legitimate signature.
      */
     public function testArrayValuedParamDoesNotEmitWarning(): void
     {
@@ -96,7 +95,7 @@ final class UnitPaySignatureTest extends TestCase
             restore_error_handler();
         }
 
-        // '' подставлено вместо массива, поэтому совпадает с параметром с пустым значением.
+        // '' is substituted for the array, so it matches a param with an empty value.
         $this->assertSame(
             $this->unitPay->getSignature(['a' => ''], 'pay'),
             $signature

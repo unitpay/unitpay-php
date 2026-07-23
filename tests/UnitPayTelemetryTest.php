@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 final class UnitPayTelemetryTest extends TestCase
 {
     /**
-     * Транспорт-шпион: записывает url/headers/timeoutMs каждого вызова httpGet.
+     * Spy transport: records url/headers/timeoutMs of every httpGet call.
      * @param array<int,array{url:string,headers:array<int,string>,timeoutMs:int|null}> $calls
      * @return callable
      */
@@ -56,7 +56,7 @@ final class UnitPayTelemetryTest extends TestCase
     {
         $calls = [];
         $unitPay = new UnitPay('unitpay.test', 'secret', $this->spy($calls));
-        // Пре-флайт ошибка (нет обязательных параметров) — реальный запрос не ушёл; телеметрия выключена.
+        // Pre-flight error (missing required params) — the real request never went out; telemetry is off.
         try {
             $unitPay->api('initPayment', ['account' => 1]);
         } catch (\Throwable $e) {
@@ -82,7 +82,7 @@ final class UnitPayTelemetryTest extends TestCase
         $this->assertSame('ERR_MISSING_REQUIRED_PARAM', $q['error']);
         $this->assertSame('initPayment', $q['method']);
         $this->assertSame(300, $calls[0]['timeoutMs']);
-        // Граница анонимности: секрет не утекает в beacon.
+        // Anonymity boundary: the secret does not leak into the beacon.
         $this->assertStringNotContainsString('secret', $calls[0]['url']);
     }
 
@@ -139,7 +139,7 @@ final class UnitPayTelemetryTest extends TestCase
     public function testApiUnreachableEmitsNoBeacon(): void
     {
         $calls = [];
-        // Транспорт фейлит реальный запрос (false); любой beacon тоже попал бы в $calls.
+        // The transport fails the real request (false); any beacon would also land in $calls.
         $transport = static function ($url, $headers = [], $timeoutMs = null) use (&$calls) {
             $calls[] = $url;
             return false;
@@ -151,7 +151,7 @@ final class UnitPayTelemetryTest extends TestCase
         } catch (\Throwable $e) {
         }
 
-        // Ровно один вызов — реальный api-запрос; beacon ERR_API_UNREACHABLE НЕ отправлен (тот же хост).
+        // Exactly one call — the real api request; the ERR_API_UNREACHABLE beacon is NOT sent (same host).
         $this->assertCount(1, $calls);
         $this->assertStringNotContainsString('/sdk/telemetry', $calls[0]);
     }
@@ -163,8 +163,8 @@ final class UnitPayTelemetryTest extends TestCase
         };
         $unitPay = new UnitPay('unitpay.test', 'secret', $throwing);
         $unitPay->enableTelemetry();
-        // Пре-флайт ошибка + падающий beacon-транспорт: наружу выходит доменное исключение,
-        // а не RuntimeException из телеметрии.
+        // Pre-flight error + a throwing beacon transport: the domain exception surfaces,
+        // not the RuntimeException from telemetry.
         $this->expectException(\UnitpayValidationException::class);
         $unitPay->api('initPayment', ['account' => 1]);
     }

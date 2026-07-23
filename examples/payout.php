@@ -3,9 +3,9 @@
 header('Content-Type: text/html; charset=UTF-8');
 
 /**
- * Выплаты (mass-payment). API уровня аккаунта: аутентифицируется ключом АККАУНТА +
- * login, а не ключом проекта. Ключ аккаунта передаётся явно в параметрах api() и
- * переопределяет ключ проекта из конструктора.
+ * Payouts (mass-payment). Account-level API: authenticates with the ACCOUNT key +
+ * login, not the project key. The account key is passed explicitly in the api()
+ * parameters and overrides the project key from the constructor.
  *
  * @link https://help.unitpay.ru/api/create_payout
  * @link https://help.unitpay.ru/api/payout_info
@@ -18,27 +18,27 @@ require_once __DIR__ . '/../UnitPay.php';
 $unitpay = new UnitPay($domain, $secretKey);
 
 $account = ['login' => $login, 'secretKey' => $accountSecretKey];
-$transactionId = 'payout-1782'; // уникальный на вашей стороне
+$transactionId = 'payout-1782'; // unique on your side
 
 try {
-    // Банки — участники СБП: memberId обязателен для выплат по СБП.
+    // SBP member banks: memberId is required for SBP payouts.
     $banks = $unitpay->api('getSbpBankList', $account);
     var_dump($banks->result ?? $banks->error ?? $banks);
 
-    // Создаём выплату получателю по СБП.
+    // Create a payout to the recipient via SBP.
     $response = $unitpay->api('massPayment', $account + [
         'transactionId' => $transactionId,
         'sum'           => 100,
         'purse'         => '79510000071',
         'paymentType'   => 'sbp',
-        'memberId'      => '100000000004', // из getSbpBankList; только для СБП
+        'memberId'      => '100000000004', // from getSbpBankList; SBP only
     ]);
 
     if (isset($response->result)) {
         $payoutId = $response->result->payoutId;
         $status = $response->result->status; // success | not_completed
 
-        // Позже — проверяем статус выплаты по вашему transactionId.
+        // Later — check the payout status by your transactionId.
         $info = $unitpay->api('massPaymentStatus', $account + ['transactionId' => $transactionId]);
         var_dump($info->result ?? $info->error ?? $info);
     } elseif (isset($response->error->message)) {
