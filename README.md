@@ -137,7 +137,7 @@ $unitpay = new UnitPay($domain, $secretKey);
 
 /**
  * Base params: account, desc, sum, currency, projectId, paymentType
- * paymentType — код способа оплаты из справочника (константы UnitPay::PAYMENT_TYPE_*):
+ * paymentType is a payment method code from the reference (UnitPay::PAYMENT_TYPE_* constants):
  *   card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney.
  *
  * @link https://help.unitpay.ru/payments/create-payment
@@ -222,7 +222,9 @@ try {
     // Validate request (check ip address, signature and etc)
     $unitpay->checkHandlerRequest();
 
-    list($method, $params) = [$_GET['method'], $_GET['params']];
+    // Read the verified request from the SDK (honors the overridden request, not $_GET)
+    $method = $unitpay->getHandlerMethod();
+    $params = $unitpay->getHandlerParams();
 
     // Very important! Validate request with your order data, before complete order
     if (
@@ -244,11 +246,19 @@ try {
             // Please complete order
             echo $unitpay->getSuccessHandlerResponse('Pay Success');
             break;
+        // Method Preauth means a two-stage hold: funds are only HELD, not captured yet.
+        case 'preauth':
+            // Do NOT deliver goods/services here; wait for 'pay'. Just acknowledge receipt.
+            echo $unitpay->getSuccessHandlerResponse('Preauth received. Funds held, awaiting capture.');
+            break;
         // Method Error means that an error has occurred.
         case 'error':
             // Please log error text.
             echo $unitpay->getSuccessHandlerResponse('Error logged');
             break;
+        // Unknown method: do not leave an empty response (Unitpay would treat it as a failure).
+        default:
+            throw new InvalidArgumentException('Unexpected handler method: ' . $method);
     }
 // Oops! Something went wrong.
 } catch (Exception $e) {
@@ -352,8 +362,10 @@ already makes, so Unitpay can see which SDK/PHP versions are in the field. This
 is standard SDK self-identification, like any `User-Agent` — it makes **no extra
 network calls** and never sends secrets, amounts, or customer data:
 
-* `api()` requests carry a `User-Agent: unitpay-php-sdk/<ver> php/<ver>` header
-  and an `X-Unitpay-Client` JSON header with the same facts.
+* `api()` requests carry a `User-Agent: unitpay-php-sdk/<ver> api/<v>` header and
+  an `X-Unitpay-Client` JSON header with `sdk_version`, `api_version` (the Unitpay
+  API surface targeted), `lang`, `lang_version`, `platform` (coarse OS family
+  only), `publisher`.
 * `form()` URLs carry an `sdk=php_<ver>_<major.minor>` query parameter (outside
   the signature — it does not affect it).
 
