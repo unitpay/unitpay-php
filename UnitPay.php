@@ -545,6 +545,9 @@ class UnitPay
     /** SDK version; sent in the telemetry fingerprint. Keep in sync with the release git tag. */
     public const VERSION = '2.1.0';
 
+    /** Unitpay API surface this SDK targets; sent in the telemetry fingerprint. Bump when moving to a new API version. */
+    public const API_VERSION = 'v1';
+
     /**
      * Payment method codes for the `paymentType` param in api('initPayment', ...)
      * and payouts api('massPayment', ...). The source of truth is the backend; code list:
@@ -1079,20 +1082,25 @@ class UnitPay
     }
 
     /**
-     * SDK self-identification headers sent on api(): a conventional User-Agent (full PHP
-     * version — invisible to the buyer, useful for diagnostics) plus X-Unitpay-Client, a
-     * JSON version the backend can read without parsing the UA string.
+     * SDK self-identification headers sent on api(). Shape follows the common client-
+     * telemetry convention (short User-Agent plus X-Unitpay-Client, a JSON object the
+     * backend can read without parsing the UA string) with our own naming. api_version
+     * is the Unitpay API surface this SDK targets; platform is the coarse OS family only
+     * (no kernel/arch/uname); nothing carries secrets or PII.
      * @return string[]
      */
     private function fingerprintHeaders(): array
     {
         $client = (string) json_encode([
-            'platform'    => 'php',
-            'sdk_version' => self::VERSION,
-            'php_version' => PHP_VERSION,
+            'sdk_version'  => self::VERSION,
+            'api_version'  => self::API_VERSION,
+            'lang'         => 'php',
+            'lang_version' => PHP_VERSION,
+            'platform'     => PHP_OS_FAMILY,
+            'publisher'    => 'unitpay',
         ]);
         return [
-            'User-Agent: unitpay-php-sdk/' . self::VERSION . ' php/' . PHP_VERSION,
+            'User-Agent: unitpay-php-sdk/' . self::VERSION . ' api/' . self::API_VERSION,
             'X-Unitpay-Client: ' . $client,
         ];
     }

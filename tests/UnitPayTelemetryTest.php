@@ -42,10 +42,13 @@ final class UnitPayTelemetryTest extends TestCase
         $ua = $this->headerValue($headers, 'User-Agent');
         $client = $this->headerValue($headers, 'X-Unitpay-Client');
 
-        $this->assertSame('unitpay-php-sdk/' . UnitPay::VERSION . ' php/' . PHP_VERSION, $ua);
+        $this->assertSame('unitpay-php-sdk/' . UnitPay::VERSION . ' api/' . UnitPay::API_VERSION, $ua);
         $decoded = json_decode((string) $client, true);
-        $this->assertSame('php', $decoded['platform']);
         $this->assertSame(UnitPay::VERSION, $decoded['sdk_version']);
-        $this->assertSame(PHP_VERSION, $decoded['php_version']);
+        $this->assertSame(UnitPay::API_VERSION, $decoded['api_version']);
+        $this->assertSame('php', $decoded['lang']);
+        $this->assertSame(PHP_VERSION, $decoded['lang_version']);
+        $this->assertSame(PHP_OS_FAMILY, $decoded['platform']);
+        $this->assertSame('unitpay', $decoded['publisher']);
     }
 }

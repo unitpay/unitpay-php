@@ -2,7 +2,7 @@
 
 ### v2.1.0
 
-* Телеметрия: пассивный анонимный фингерпринт версии (заголовки `User-Agent` и `X-Unitpay-Client` в `api()`, параметр `sdk` в URL `form()`) — самоидентификация SDK без дополнительных сетевых запросов и без PII; отдельного эндпоинта телеметрии нет. Добавлена константа `UnitPay::VERSION`
+* Телеметрия: пассивный анонимный фингерпринт версии (заголовки `User-Agent` и `X-Unitpay-Client` в `api()`, параметр `sdk` в URL `form()`) — самоидентификация SDK без дополнительных сетевых запросов и без PII; отдельного эндпоинта телеметрии нет. `User-Agent: unitpay-php-sdk/<ver> api/<v>` и JSON-заголовок `X-Unitpay-Client` с полями `sdk_version`, `api_version` (версия API Unitpay, к которой обращается SDK), `lang`, `lang_version`, `platform` (только семейство ОС), `publisher`. Добавлены константы `UnitPay::VERSION` и `UnitPay::API_VERSION`
 * `CashItem`: справочники 54-ФЗ синхронизированы с бэкендом:
   * Добавлены ставки НДС: vat5, vat7, vat22 и расчётные vat105, vat107, vat110, vat120, vat122
   * Добавлены признаки предмета расчёта: payment_2, deposit, expense, pension_insurance_ip, pension_insurance, medical_insurance_ip, medical_insurance, social_insurance, casino_payment, issuance_bank, commodity_without_mark, commodity_mark
