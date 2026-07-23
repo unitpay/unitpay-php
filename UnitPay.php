@@ -640,6 +640,21 @@ class UnitPay
     public const PAYMENT_TYPE_WEBMONEY = 'webmoney';
 
     /**
+     * Коды пре-флайт ошибок для опциональной телеметрии (Слой B). Стабильные, не-PII;
+     * только additive — не переименовывать/не удалять, чтобы серии на бэкенде оставались
+     * сравнимыми. ERR_API_UNREACHABLE определён, но НЕ отправляется: beacon шёл бы на тот
+     * же недоступный $domain (см. reportTelemetry / checkHandlerRequest wire-in).
+     */
+    public const ERR_METHOD_NOT_SUPPORTED   = 'ERR_METHOD_NOT_SUPPORTED';
+    public const ERR_MISSING_REQUIRED_PARAM = 'ERR_MISSING_REQUIRED_PARAM';
+    public const ERR_MISSING_SECRET_KEY     = 'ERR_MISSING_SECRET_KEY';
+    public const ERR_API_UNREACHABLE        = 'ERR_API_UNREACHABLE';
+    public const ERR_MISSING_METHOD         = 'ERR_MISSING_METHOD';
+    public const ERR_MISSING_PARAMS         = 'ERR_MISSING_PARAMS';
+    public const ERR_WRONG_SIGNATURE        = 'ERR_WRONG_SIGNATURE';
+    public const ERR_IP_NOT_ALLOWED         = 'ERR_IP_NOT_ALLOWED';
+
+    /**
      * Поддерживаемые методы api() и их обязательные параметры. secretKey
      * подставляется и проверяется в api(), поэтому здесь не перечислен.
      */
@@ -697,6 +712,8 @@ class UnitPay
      */
     private $customIps = [];
     private $ipsUrl;
+    private $telemetryUrl;
+    private $telemetryEnabled = false;
 
     /**
      * @param string $domain только хост, например "unitpay.ru" — без схемы и пути (станет "https://$domain/api").
@@ -714,6 +731,7 @@ class UnitPay
         $this->apiUrl = "https://$domain/api";
         $this->formUrl = "https://$domain/pay/";
         $this->ipsUrl = "https://$domain/ips/ips_webhooks.json";
+        $this->telemetryUrl = "https://$domain/sdk/telemetry";
         $this->transport = $transport;
         $this->request = $request;
         $this->clientIp = $clientIp;
@@ -1064,6 +1082,7 @@ class UnitPay
     public function api($method, array $params = [])
     {
         if (!isset($this->requiredUnitpayMethodsParams[$method])) {
+            $this->reportTelemetry(self::ERR_METHOD_NOT_SUPPORTED, $method);
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 
@@ -1071,6 +1090,7 @@ class UnitPay
 
         foreach ($this->requiredUnitpayMethodsParams[$method] as $rParam) {
             if (!isset($params[$rParam])) {
+                $this->reportTelemetry(self::ERR_MISSING_REQUIRED_PARAM, $method);
                 throw new UnitpayValidationException('Param ' . $rParam . ' is null');
             }
         }
@@ -1079,6 +1099,7 @@ class UnitPay
             $params['secretKey'] = $this->secretKey;
         }
         if (empty($params['secretKey'])) {
+            $this->reportTelemetry(self::ERR_MISSING_SECRET_KEY, $method);
             throw new UnitpayValidationException('SecretKey is null');
         }
 
@@ -1115,31 +1136,38 @@ class UnitPay
     {
         $ip = $this->getIp();
         if (empty($this->secretKey)) {
+            $this->reportTelemetry(self::ERR_MISSING_SECRET_KEY, 'unknown');
             throw new UnitpayValidationException('SecretKey is null');
         }
 
         $request = $this->request !== null ? $this->request : $_GET;
 
         if (!isset($request['method'])) {
+            $this->reportTelemetry(self::ERR_MISSING_METHOD, 'unknown');
             throw new UnitpayValidationException('Method is null');
         }
 
         if (!isset($request['params'])) {
+            $this->reportTelemetry(self::ERR_MISSING_PARAMS, 'unknown');
             throw new UnitpayValidationException('Params is null');
         }
 
         list($method, $params) = [$request['method'], $request['params']];
 
         if (!in_array($method, $this->supportedPartnerMethods, true)) {
+            // method здесь — произвольный ввод отправителя; не эхоим его в телеметрию.
+            $this->reportTelemetry(self::ERR_METHOD_NOT_SUPPORTED, 'unknown');
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 
         if (!isset($params['signature']) || !is_string($params['signature'])
             || !hash_equals($this->getSignature($params, $method), $params['signature'])) {
+            $this->reportTelemetry(self::ERR_WRONG_SIGNATURE, $method);
             throw new UnitpaySignatureException('Wrong signature');
         }
 
         if (!$this->isAllowedIp($ip)) {
+            $this->reportTelemetry(self::ERR_IP_NOT_ALLOWED, $method);
             throw new UnitpayIpException('IP address Error');
         }
 
@@ -1215,6 +1243,49 @@ class UnitPay
             'User-Agent: ' . $this->getUserAgent(),
             'X-Unitpay-Client: ' . $this->getClientHeader(),
         ];
+    }
+
+    /**
+     * Включает опциональную телеметрию пре-флайт ошибок (Слой B). По умолчанию выключена.
+     * Мерчант оперирует только флагом — URL эндпоинта выводится из $domain, передавать его
+     * не нужно. Полностью заглушается переменной окружения UNITPAY_SDK_TELEMETRY_DISABLE
+     * (1/true/yes) без правки кода.
+     * @return $this
+     */
+    public function enableTelemetry()
+    {
+        $this->telemetryEnabled = true;
+        return $this;
+    }
+
+    /**
+     * Best-effort beacon пре-флайт ошибки. Никогда не бросает и не влияет на платёжный
+     * поток: no-op при выключенной телеметрии или заданном env-kill-switch; жёсткий
+     * таймаут 300 мс; шлёт только не-PII поля (sdk, php, error, method).
+     * @param string $code одна из ERR_* констант
+     * @param string $method имя метода или 'unknown'
+     * @return void
+     */
+    private function reportTelemetry($code, $method)
+    {
+        if (!$this->telemetryEnabled) {
+            return;
+        }
+        $disable = getenv('UNITPAY_SDK_TELEMETRY_DISABLE');
+        if ($disable !== false && in_array(strtolower(trim($disable)), ['1', 'true', 'yes'], true)) {
+            return;
+        }
+        $query = http_build_query([
+            'sdk'    => self::VERSION,
+            'php'    => PHP_VERSION,
+            'error'  => $code,
+            'method' => $method,
+        ]);
+        try {
+            $this->httpGet($this->telemetryUrl . '?' . $query, $this->fingerprintHeaders(), 300);
+        } catch (\Throwable $e) {
+            // проглатываем — телеметрия не должна влиять на платёжный поток
+        }
     }
 
     /**
