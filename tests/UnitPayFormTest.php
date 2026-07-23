@@ -117,4 +117,30 @@ final class UnitPayFormTest extends TestCase
         ]);
         $this->assertSame($expected, $q['signature']);
     }
+
+    /**
+     * Слой A: form() добавляет машиночитаемый токен фингерпринта sdk (URL-safe,
+     * major.minor PHP) — и он НЕ меняет подпись (стоит вне подписываемых параметров).
+     */
+    public function testFormCarriesSdkTokenWithoutBreakingSignature()
+    {
+        $unitPay = new UnitPay('unitpay.test', 'secret');
+        $url = $unitPay->form('pub', 100, 'order-1', 'Desc');
+        $q = $this->queryOf($url);
+
+        $this->assertSame(
+            'php_' . UnitPay::VERSION . '_' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
+            $q['sdk']
+        );
+        // URL-safe: токен появляется в готовом URL дословно, без %-кодирования.
+        $this->assertStringContainsString('sdk=php_', $url);
+
+        $expected = (new UnitPay('unitpay.test', 'secret'))->getSignature([
+            'account'  => 'order-1',
+            'currency' => 'RUB',
+            'desc'     => 'Desc',
+            'sum'      => 100,
+        ]);
+        $this->assertSame($expected, $q['signature']);
+    }
 }

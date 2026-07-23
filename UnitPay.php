@@ -613,6 +613,9 @@ final class UnitpayIpAllowlist
  */
 class UnitPay
 {
+    /** Версия SDK; шлётся в фингерпринте телеметрии. Держать в синхроне с git-тегом релиза. */
+    public const VERSION = '2.1.0';
+
     /**
      * Коды способов оплаты для параметра `paymentType` в api('initPayment', ...)
      * и выплатах api('massPayment', ...). Источник истины — бэкенд, список кодов:
@@ -939,6 +942,7 @@ class UnitPay
         $params = array_merge($this->params, $vitalParams);
         $params['signature'] = $this->getSignature($vitalParams);
         $params['locale'] = $locale;
+        $params['sdk'] = $this->getSdkToken(); // вне подписи — на неё не влияет (Слой A)
         $this->params = [];
         return $this->formUrl . $publicKey . '?' . http_build_query($params);
     }
@@ -1149,6 +1153,17 @@ class UnitPay
     public function getHandlerParams()
     {
         return $this->handlerParams;
+    }
+
+    /**
+     * Машиночитаемый токен фингерпринта для form()-URL: <платформа>_<версия SDK>_<major.minor PHP>.
+     * Только URL-safe символы (http_build_query их не кодирует); major.minor — чтобы не светить
+     * точный патч PHP в видимом покупателю URL платёжной формы.
+     * @return string
+     */
+    private function getSdkToken()
+    {
+        return 'php_' . self::VERSION . '_' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
     }
 
     /**
