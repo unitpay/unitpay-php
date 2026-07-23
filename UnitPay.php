@@ -569,21 +569,6 @@ class UnitPay
     public const PAYMENT_TYPE_WEBMONEY = 'webmoney';
 
     /**
-     * Pre-flight error codes for optional telemetry (Layer B). Stable, non-PII;
-     * additive-only — do not rename or remove, so the backend series stay comparable.
-     * ERR_API_UNREACHABLE is defined but NOT sent: the beacon would go to the same
-     * unreachable $domain (see reportTelemetry / checkHandlerRequest wire-in).
-     */
-    public const ERR_METHOD_NOT_SUPPORTED   = 'ERR_METHOD_NOT_SUPPORTED';
-    public const ERR_MISSING_REQUIRED_PARAM = 'ERR_MISSING_REQUIRED_PARAM';
-    public const ERR_MISSING_SECRET_KEY     = 'ERR_MISSING_SECRET_KEY';
-    public const ERR_API_UNREACHABLE        = 'ERR_API_UNREACHABLE';
-    public const ERR_MISSING_METHOD         = 'ERR_MISSING_METHOD';
-    public const ERR_MISSING_PARAMS         = 'ERR_MISSING_PARAMS';
-    public const ERR_WRONG_SIGNATURE        = 'ERR_WRONG_SIGNATURE';
-    public const ERR_IP_NOT_ALLOWED         = 'ERR_IP_NOT_ALLOWED';
-
-    /**
      * Supported api() methods and their required parameters. secretKey is
      * injected and validated in api(), so it is not listed here.
      * @var array<string, string[]>
@@ -648,8 +633,6 @@ class UnitPay
      */
     private array $customIps = [];
     private string $ipsUrl;
-    private string $telemetryUrl;
-    private bool $telemetryEnabled = false;
 
     /**
      * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path (becomes "https://$domain/api").
@@ -666,7 +649,6 @@ class UnitPay
         $this->apiUrl = "https://$domain/api";
         $this->formUrl = "https://$domain/pay/";
         $this->ipsUrl = "https://$domain/ips/ips_webhooks.json";
-        $this->telemetryUrl = "https://$domain/sdk/telemetry";
         $this->transport = $transport;
         $this->request = $request;
         $this->clientIp = $clientIp;
@@ -821,14 +803,13 @@ class UnitPay
      * its default true). The file_get_contents fallback suppresses its transport
      * warning via set_error_handler, not the '@' operator (which QA rules forbid) —
      * otherwise that warning would log the URL together with the secret.
-     * @param string[] $headers HTTP headers of the form "Name: value" (Layer A fingerprint / beacon).
-     * @param int|null $timeoutMs hard timeout in ms (Layer B beacon); null uses api()'s normal timeouts.
+     * @param string[] $headers HTTP headers of the form "Name: value" (the SDK telemetry fingerprint on api()).
      * @return string|false
      */
-    protected function httpGet(string $url, array $headers = [], ?int $timeoutMs = null)
+    protected function httpGet(string $url, array $headers = [])
     {
         if ($this->transport !== null) {
-            return call_user_func($this->transport, $url, $headers, $timeoutMs);
+            return call_user_func($this->transport, $url, $headers);
         }
 
         if (function_exists('curl_init')) {
@@ -838,13 +819,6 @@ class UnitPay
                 CURLOPT_CONNECTTIMEOUT => 5,
                 CURLOPT_TIMEOUT        => 10,
             ];
-            if ($timeoutMs !== null) {
-                // Millisecond timeouts + NOSIGNAL for the best-effort Layer B beacon (replacing the second-based ones).
-                unset($opts[CURLOPT_CONNECTTIMEOUT], $opts[CURLOPT_TIMEOUT]);
-                $opts[CURLOPT_NOSIGNAL] = true;
-                $opts[CURLOPT_CONNECTTIMEOUT_MS] = $timeoutMs;
-                $opts[CURLOPT_TIMEOUT_MS] = $timeoutMs;
-            }
             if ($headers !== []) {
                 $opts[CURLOPT_HTTPHEADER] = $headers;
             }
@@ -856,7 +830,7 @@ class UnitPay
             return $body;
         }
 
-        $http = ['timeout' => $timeoutMs !== null ? $timeoutMs / 1000 : 10];
+        $http = ['timeout' => 10];
         if ($headers !== []) {
             $http['header'] = implode("\r\n", $headers);
         }
@@ -892,7 +866,7 @@ class UnitPay
         $params = array_merge($this->params, $vitalParams);
         $params['signature'] = $this->getSignature($vitalParams);
         $params['locale'] = $locale;
-        $params['sdk'] = $this->getSdkToken(); // outside the signature — does not affect it (Layer A)
+        $params['sdk'] = $this->getSdkToken(); // outside the signature — does not affect it
         $this->params = [];
         return $this->formUrl . $publicKey . '?' . http_build_query($params);
     }
@@ -990,7 +964,6 @@ class UnitPay
     public function api(string $method, array $params = []): object
     {
         if (!isset($this->requiredUnitpayMethodsParams[$method])) {
-            $this->reportTelemetry(self::ERR_METHOD_NOT_SUPPORTED, $method);
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 
@@ -998,7 +971,6 @@ class UnitPay
 
         foreach ($this->requiredUnitpayMethodsParams[$method] as $rParam) {
             if (!isset($params[$rParam])) {
-                $this->reportTelemetry(self::ERR_MISSING_REQUIRED_PARAM, $method);
                 throw new UnitpayValidationException('Param ' . $rParam . ' is null');
             }
         }
@@ -1007,7 +979,6 @@ class UnitPay
             $params['secretKey'] = $this->secretKey;
         }
         if (empty($params['secretKey'])) {
-            $this->reportTelemetry(self::ERR_MISSING_SECRET_KEY, $method);
             throw new UnitpayValidationException('SecretKey is null');
         }
 
@@ -1043,38 +1014,31 @@ class UnitPay
     {
         $ip = $this->getIp();
         if (empty($this->secretKey)) {
-            $this->reportTelemetry(self::ERR_MISSING_SECRET_KEY, 'unknown');
             throw new UnitpayValidationException('SecretKey is null');
         }
 
         $request = $this->request !== null ? $this->request : $_GET;
 
         if (!isset($request['method'])) {
-            $this->reportTelemetry(self::ERR_MISSING_METHOD, 'unknown');
             throw new UnitpayValidationException('Method is null');
         }
 
         if (!isset($request['params'])) {
-            $this->reportTelemetry(self::ERR_MISSING_PARAMS, 'unknown');
             throw new UnitpayValidationException('Params is null');
         }
 
         list($method, $params) = [$request['method'], $request['params']];
 
         if (!in_array($method, $this->supportedPartnerMethods, true)) {
-            // method here is arbitrary sender input; do not echo it into telemetry.
-            $this->reportTelemetry(self::ERR_METHOD_NOT_SUPPORTED, 'unknown');
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 
         if (!isset($params['signature']) || !is_string($params['signature'])
             || !hash_equals($this->getSignature($params, $method), $params['signature'])) {
-            $this->reportTelemetry(self::ERR_WRONG_SIGNATURE, $method);
             throw new UnitpaySignatureException('Wrong signature');
         }
 
         if (!$this->isAllowedIp($ip)) {
-            $this->reportTelemetry(self::ERR_IP_NOT_ALLOWED, $method);
             throw new UnitpayIpException('IP address Error');
         }
 
@@ -1115,78 +1079,22 @@ class UnitPay
     }
 
     /**
-     * SDK self-identification string for the User-Agent header (full PHP version —
-     * the header is invisible to the buyer and useful for diagnostics).
-     */
-    private function getUserAgent(): string
-    {
-        return 'unitpay-php-sdk/' . self::VERSION . ' php/' . PHP_VERSION;
-    }
-
-    /**
-     * JSON fingerprint for the X-Unitpay-Client header — a machine-readable version of
-     * the UA, so the backend does not have to parse the User-Agent string with a regex.
-     */
-    private function getClientHeader(): string
-    {
-        return (string) json_encode([
-            'platform'    => 'php',
-            'sdk_version' => self::VERSION,
-            'php_version' => PHP_VERSION,
-        ]);
-    }
-
-    /**
-     * Fingerprint headers for the header channels (api() and the Layer B beacon).
+     * SDK self-identification headers sent on api(): a conventional User-Agent (full PHP
+     * version — invisible to the buyer, useful for diagnostics) plus X-Unitpay-Client, a
+     * JSON version the backend can read without parsing the UA string.
      * @return string[]
      */
     private function fingerprintHeaders(): array
     {
-        return [
-            'User-Agent: ' . $this->getUserAgent(),
-            'X-Unitpay-Client: ' . $this->getClientHeader(),
-        ];
-    }
-
-    /**
-     * Enables optional pre-flight error telemetry (Layer B). Disabled by default.
-     * The merchant only toggles the flag — the endpoint URL is derived from $domain and
-     * need not be passed. Fully silenced by the UNITPAY_SDK_TELEMETRY_DISABLE environment
-     * variable (1/true/yes) with no code change.
-     */
-    public function enableTelemetry(): self
-    {
-        $this->telemetryEnabled = true;
-        return $this;
-    }
-
-    /**
-     * Best-effort pre-flight error beacon. Never throws and never affects the payment
-     * flow: a no-op when telemetry is disabled or the env kill switch is set; hard
-     * 300 ms timeout; sends only non-PII fields (sdk, php, error, method).
-     * @param string $code one of the ERR_* constants
-     * @param string $method method name or 'unknown'
-     */
-    private function reportTelemetry(string $code, string $method): void
-    {
-        if (!$this->telemetryEnabled) {
-            return;
-        }
-        $disable = getenv('UNITPAY_SDK_TELEMETRY_DISABLE');
-        if ($disable !== false && in_array(strtolower(trim($disable)), ['1', 'true', 'yes'], true)) {
-            return;
-        }
-        $query = http_build_query([
-            'sdk'    => self::VERSION,
-            'php'    => PHP_VERSION,
-            'error'  => $code,
-            'method' => $method,
+        $client = (string) json_encode([
+            'platform'    => 'php',
+            'sdk_version' => self::VERSION,
+            'php_version' => PHP_VERSION,
         ]);
-        try {
-            $this->httpGet($this->telemetryUrl . '?' . $query, $this->fingerprintHeaders(), 300);
-        } catch (\Throwable $e) {
-            // swallow — telemetry must not affect the payment flow
-        }
+        return [
+            'User-Agent: unitpay-php-sdk/' . self::VERSION . ' php/' . PHP_VERSION,
+            'X-Unitpay-Client: ' . $client,
+        ];
     }
 
     /**

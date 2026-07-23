@@ -27,33 +27,19 @@
         <exclude name="CyclomaticComplexity"/>
         <exclude name="NPathComplexity"/>
         <exclude name="ExcessiveClassComplexity"/>
-        <exclude name="TooManyFields"/>
     </rule>
 
     <!--
         UnitPay deliberately holds four responsibilities in one class (outbound
         signing, API calls, webhook verification, handler responses), so its WMC
         (sum of per-method complexities) grows with every API method and feature —
-        each of which is individually simple. The telemetry feature (fingerprint
-        helpers + opt-in reporter + pre-flight wire-in) nudged WMC to ~68. Lift the
-        class-complexity threshold modestly rather than dropping the rule, so a
-        genuinely tangled method still trips it.
+        each of which is individually simple. Lift the class-complexity threshold
+        modestly rather than dropping the rule, so a genuinely tangled method
+        still trips it.
     -->
     <rule ref="rulesets/codesize.xml/ExcessiveClassComplexity">
         <properties>
-            <property name="maximum" value="70"/>
-        </properties>
-    </rule>
-
-    <!--
-        Single-file, four-responsibility SDK: state accumulates as fields
-        (derived URLs, injection hooks, IP allowlist, telemetry flag/endpoint).
-        Each is individually simple; lift the field cap modestly rather than
-        splitting the deliberately cohesive class.
-    -->
-    <rule ref="rulesets/codesize.xml/TooManyFields">
-        <properties>
-            <property name="maxfields" value="17"/>
+            <property name="maximum" value="60"/>
         </properties>
     </rule>
 
