@@ -2,103 +2,103 @@
 
 ### v2.1.0
 
-* Телеметрия: пассивный анонимный фингерпринт версии (заголовки `User-Agent` и `X-Unitpay-Client` в `api()`, параметр `sdk` в URL `form()`) — самоидентификация SDK без дополнительных сетевых запросов и без PII; отдельного эндпоинта телеметрии нет. `User-Agent: unitpay-php-sdk/<ver> api/<v>` и JSON-заголовок `X-Unitpay-Client` с полями `sdk_version`, `api_version` (версия API Unitpay, к которой обращается SDK), `lang`, `lang_version`, `platform` (только семейство ОС), `publisher`. Добавлены константы `UnitPay::VERSION` и `UnitPay::API_VERSION`
-* `CashItem`: справочники 54-ФЗ синхронизированы с бэкендом:
-  * Добавлены ставки НДС: vat5, vat7, vat22 и расчётные vat105, vat107, vat110, vat120, vat122
-  * Добавлены признаки предмета расчёта: payment_2, deposit, expense, pension_insurance_ip, pension_insurance, medical_insurance_ip, medical_insurance, social_insurance, casino_payment, issuance_bank, commodity_without_mark, commodity_mark
-  * Помечены устаревшими (сохранены для обратной совместимости, удаление в 3.0) значения, отклоняемые публичным API: excise, gambling_bet, gambling_prize, lottery_prize, composite
-* `CashItem`: добавлены опциональные поля бэкенда — sum, currency, measure (константы `MEASURE_*`), nomenclatureCode, markCode, markQuantity, pre_text, post_text; `setCashItems()` сериализует их только когда они заданы
-* `api()`: добавлена поддержка методов refundPayment, confirmPayment, cancelPayment, listSubscriptions, getSubscription, closeSubscription, getMethodsAvailable, getCommissions, getCurrencyCourses, getPartner, offsetAdvance — с проверкой обязательных параметров для каждого (secretKey подставляется автоматически)
-* `api()`: добавлены методы массовых выплат — massPayment, massPaymentStatus, massPaymentAvailableAmount, massPaymentCommissions, getSbpBankList, getBinInfo (требуют login и secretKey кабинета)
-* `api()`: добавлены константы `PAYMENT_TYPE_*` для актуальных способов оплаты Unitpay (card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney) — только для удобства и защиты от опечаток, `paymentType` по-прежнему передаётся без валидации; в README и примере `initPaymentApi` они заменили устаревшие qiwi/yandex/mc/alfaClick
-* `api()`: явный secretKey в параметрах вызова переопределяет ключ из конструктора — методы уровня кабинета и выплат можно вызывать с ключом кабинета вместо ключа проекта
-* `api()`: обязательные параметры initPayment приведены в соответствие с бэкендом — account, sum, projectId, paymentType (secretKey проверяется отдельно); desc больше не обязателен
-* `api()`: параметры теперь отправляются плоско (`method=X&account=…&secretKey=…`), как Unitpay документирует и принимает с 05.2026, вместо устаревшей вложенности `params[...]` (по-прежнему принимается бэкендом, так что это не ломающее изменение); обработчик входящих вебхуков не затронут и продолжает читать `params[...]`
-* `api()`: параметры из fluent-сеттеров (setCashItems, setCustomerEmail, setCustomerPhone, setBackUrl) теперь попадают и в вызовы `api()`, не только в `form()`; явные параметры `api()` имеют приоритет над накопленными
-* `CashItem`: конструктор теперь отклоняет нечисловые count и price (раньше отлавливались только 0/отрицательные) и нормализует числовые строки в int/float
-* `CashItem`: конструктор отклоняет неположительный count и отрицательный price (изменение поведения)
-* `CashItem`: сохраняет дробный count (весовой/объёмный товар) вместо усечения до int
-* handler: IP-белый список сокращён до официально опубликованных адресов (31.186.100.49, 51.250.20.9); 127.0.0.1 по умолчанию не доверенный (за обратным прокси на том же хосте он бы обнулил проверку по IP) — добавьте его через `setAllowedIps()` для локальной отладки; добавлен сам `setAllowedIps()` для переопределения списка
-* handler: `isAllowedIp()` теперь сопоставляет не только точные IP, но и подсети CIDR (IPv4/IPv6) — работает `setAllowedIps(['77.75.153.0/25'])`
-* handler: добавлен `refreshAllowedIps()` — подтягивает актуальный список IP вебхуков из публичного фида `/ips/ips_webhooks.json` и заменяет им встроенный (выведенный из эксплуатации IP выпадает автоматически); безопасен для сбоев: при любой ошибке транспорта/парсинга/валидации сохраняет встроенный список и не бросает исключение, поэтому его можно вызывать перед `checkHandlerRequest()`
-* handler: добавлен `addAllowedIps()` — добавляет собственные IP/CIDR мерчанта (например, свой прокси/релей) поверх списка Unitpay; в отличие от `setAllowedIps()`, они сохраняются при `refreshAllowedIps()`/`setAllowedIps()`
-* handler: добавлен `getAllowedIps()` — возвращает итоговый список (Unitpay + IP мерчанта); закешируйте его после `refreshAllowedIps()` и верните через `setAllowedIps()`, чтобы не обращаться к сети на каждый вебхук
-* `UnitpayIpAllowlist::isValidEntry()` проверяет каждую загруженную запись IP/CIDR, поэтому битый JSON не может обнулить список
-* handler: `checkHandlerRequest()` теперь принимает вебхук `preauth` (уведомление о холде при двухстадийной оплате, когда средства заблокированы, но ещё не списаны) — раньше он отклонялся как неподдерживаемый метод, из-за чего двухстадийные/подписочные обработчики не могли его проверить
-* Добавлены типизированные исключения (UnitpaySignatureException, UnitpayIpException, UnitpayTransportException, UnitpayUnsupportedMethodException) с интерфейсом UnitpayExceptionInterface; каждое по-прежнему наследует прежний SPL-класс, поэтому существующие catch-блоки продолжают работать
-* `api()`: опциональный транспорт cURL с таймаутами подключения/чтения и без зависимости от allow_url_fopen (откат на file_get_contents); ext-curl добавлен в composer "suggest"
-* `api()`: транспорт cURL не вызывает curl_close() на PHP 8.0+ (там это устаревший no-op, вызывающий E_DEPRECATED на PHP 8.5 при каждом обращении к API); на PHP <8.0 хэндл (ресурс) закрывается явно через проверку PHP_VERSION_ID
-* examples: полный набор сценариев — платёжная форма (`paymentForm`), API (`initPaymentApi`), чек 54-ФЗ через `CashItem` (`receipt`), вебхук (`webhook`), `getPayment` (`paymentInfo`), возврат (`refund`), двухстадийные (`twoStagePayment`), подписки (`subscriptions`), выплаты по СБП (`payout`), справочные вызовы кабинета (`accountInfo`), чек зачёта аванса (`offsetAdvance`); добавлен индекс `examples/README.md`
-* examples: настройки подключения и данные заказа разделены — `config.php` (домен, ключи проекта/кабинета, login) и `order.php` (данные заказа); секреты читаются из окружения (`UNITPAY_SECRET_KEY`, `UNITPAY_LOGIN`, `UNITPAY_ACCOUNT_SECRET_KEY`) вместо хардкода
-* examples: надёжность — `require` через `__DIR__` (не зависит от рабочего каталога), `exit` после `header('Location:')`, вызовы `api()`/`form()` обёрнуты в try/catch (`UnitpayExceptionInterface`); `webhook` отдаёт `application/json` и не оставляет пустой ответ на неизвестный метод (`default` в switch)
-* examples: удалена недостижимая ветка обработчика "refund"; добавлена ветка "preauth" (уведомление о холде — подтверждаем получение, но товар не выдаём, это ждёт "pay"); обработка ответа типа "response" у initPayment (например, рекуррентные/подписочные списания без редиректа)
-* Добавлен набор тестов PHPUnit и внедряемые точки (getIp/транспорт API) для тестирования
-* Добавлены инструменты QA: phpstan, php-cs-fixer, phpmd и parallel-lint
-* Нативные объявления типов: параметры, возвраты и типизированные свойства во всех трёх классах (`CashItem`, `UnitpayIpAllowlist`, `UnitPay`) в границах PHP 7.4 (без union-типов, `mixed` и `declare(strict_types)`) — публичный API и поведение не изменены. Денежные и количественные параметры (`form()` `$sum`, `CashItem` `$count`/`$price`, а также возврат `httpGet()` `string|false`) намеренно оставлены нетипизированными, чтобы сохранить прежнюю «мягкую» скалярную эргономику; их типы по-прежнему описаны в PHPDoc. Проверка PHPStan поднята с level 5 до level 6
-* Минимальная версия PHP поднята до 7.4
-* Усиление по итогам код-ревью:
-  * `api()`: сворачивает только параметры fluent-сеттеров (cashItems/customerEmail/customerPhone/backUrl), а не весь набор — переиспользуемый экземпляр больше не протаскивает ключевые параметры `form()` или устаревшую подпись в посторонний вызов `api()`
-  * `setCashItems()`: бросает исключение при ошибке json_encode (например, название товара не в UTF-8) вместо тихого прикрепления пустого чека 54-ФЗ
-  * `CashItem`: сохраняет дробный count (весовой/объёмный товар) вместо усечения до int
-  * `form()`: бросает исключение при пустом секрете вместо возврата неподписанного URL — как в `api()`/`checkHandlerRequest()`
-  * `getSignature()`/`api()`/`form()`: форматируют float-параметры независимо от локали, чтобы локаль с запятой-разделителем на PHP <8.0 не испортила подпись или сумму
-  * `api()`: пустой явный secretKey (например, несработавший getenv()) откатывается на ключ экземпляра вместо исключения
-  * `httpGet()`: подавляет предупреждение file_get_contents, чтобы URL с секретом не попал в лог ошибок
-  * `checkHandlerRequest()`: отдаёт проверенные method/params через `getHandlerMethod()`/`getHandlerParams()`, чтобы потребителю не перечитывать $_GET
-  * каждое исключение SDK реализует UnitpayExceptionInterface (добавлено UnitpayValidationException для случаев отсутствующего параметра/секрета/метода)
+* Telemetry: passive anonymous version fingerprint (`User-Agent` and `X-Unitpay-Client` headers in `api()`, `sdk` parameter in the `form()` URL) — SDK self-identification with no extra network requests and no PII; there is no dedicated telemetry endpoint. `User-Agent: unitpay-php-sdk/<ver> api/<v>` and a JSON `X-Unitpay-Client` header with fields `sdk_version`, `api_version` (the Unitpay API version the SDK targets), `lang`, `lang_version`, `platform` (OS family only), `publisher`. Added constants `UnitPay::VERSION` and `UnitPay::API_VERSION`
+* `CashItem`: 54-FZ dictionaries synced with the backend:
+  * Added VAT rates: vat5, vat7, vat22 and the calculated vat105, vat107, vat110, vat120, vat122
+  * Added payment objects: payment_2, deposit, expense, pension_insurance_ip, pension_insurance, medical_insurance_ip, medical_insurance, social_insurance, casino_payment, issuance_bank, commodity_without_mark, commodity_mark
+  * Marked as deprecated (kept for backward compatibility, removal in 3.0) the values rejected by the public API: excise, gambling_bet, gambling_prize, lottery_prize, composite
+* `CashItem`: added optional backend fields — sum, currency, measure (`MEASURE_*` constants), nomenclatureCode, markCode, markQuantity, pre_text, post_text; `setCashItems()` serializes them only when they are set
+* `api()`: added support for the methods refundPayment, confirmPayment, cancelPayment, listSubscriptions, getSubscription, closeSubscription, getMethodsAvailable, getCommissions, getCurrencyCourses, getPartner, offsetAdvance — each with validation of its required parameters (secretKey is supplied automatically)
+* `api()`: added mass-payout methods — massPayment, massPaymentStatus, massPaymentAvailableAmount, massPaymentCommissions, getSbpBankList, getBinInfo (require the account login and secretKey)
+* `api()`: added `PAYMENT_TYPE_*` constants for the current Unitpay payment methods (card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney) — for convenience and typo protection only; `paymentType` is still passed without validation; in the README and the `initPaymentApi` example they replaced the deprecated qiwi/yandex/mc/alfaClick
+* `api()`: an explicit secretKey in the call parameters overrides the key from the constructor — account-level and payout methods can be called with the account key instead of the project key
+* `api()`: the required initPayment parameters were aligned with the backend — account, sum, projectId, paymentType (secretKey is validated separately); desc is no longer required
+* `api()`: parameters are now sent flat (`method=X&account=…&secretKey=…`), as Unitpay documents and has accepted since 05.2026, instead of the deprecated `params[...]` nesting (still accepted by the backend, so this is not a breaking change); the inbound webhook handler is unaffected and keeps reading `params[...]`
+* `api()`: parameters from the fluent setters (setCashItems, setCustomerEmail, setCustomerPhone, setBackUrl) now reach `api()` calls too, not just `form()`; explicit `api()` parameters take precedence over the accumulated ones
+* `CashItem`: the constructor now rejects non-numeric count and price (previously only 0/negative were caught) and normalizes numeric strings to int/float
+* `CashItem`: the constructor rejects a non-positive count and a negative price (behavior change)
+* `CashItem`: preserves a fractional count (weight/volume goods) instead of truncating to int
+* handler: the IP allowlist was trimmed to the officially published addresses (31.186.100.49, 51.250.20.9); 127.0.0.1 is not trusted by default (behind a reverse proxy on the same host it would nullify the IP check) — add it via `setAllowedIps()` for local debugging; `setAllowedIps()` itself was added to override the list
+* handler: `isAllowedIp()` now matches not only exact IPs but also CIDR subnets (IPv4/IPv6) — `setAllowedIps(['77.75.153.0/25'])` works
+* handler: added `refreshAllowedIps()` — pulls the current webhook IP list from the public feed `/ips/ips_webhooks.json` and replaces the built-in one (a decommissioned IP drops off automatically); fail-safe: on any transport/parse/validation error it keeps the built-in list and does not throw, so it can be called before `checkHandlerRequest()`
+* handler: added `addAllowedIps()` — adds the merchant's own IPs/CIDRs (e.g. your own proxy/relay) on top of the Unitpay list; unlike `setAllowedIps()`, they are preserved across `refreshAllowedIps()`/`setAllowedIps()`
+* handler: added `getAllowedIps()` — returns the effective list (Unitpay + merchant IPs); cache it after `refreshAllowedIps()` and feed it back via `setAllowedIps()` to avoid hitting the network on every webhook
+* `UnitpayIpAllowlist::isValidEntry()` validates every loaded IP/CIDR entry, so malformed JSON can never empty the list
+* handler: `checkHandlerRequest()` now accepts the `preauth` webhook (a hold notification in two-stage payments, when funds are blocked but not yet captured) — it used to be rejected as an unsupported method, which prevented two-stage/subscription handlers from verifying it
+* Added typed exceptions (UnitpaySignatureException, UnitpayIpException, UnitpayTransportException, UnitpayUnsupportedMethodException) with the UnitpayExceptionInterface; each still extends its former SPL class, so existing catch blocks keep working
+* `api()`: optional cURL transport with connect/read timeouts and no dependency on allow_url_fopen (falls back to file_get_contents); ext-curl added to composer "suggest"
+* `api()`: the cURL transport does not call curl_close() on PHP 8.0+ (there it is a deprecated no-op that raises E_DEPRECATED on PHP 8.5 on every API call); on PHP <8.0 the handle (resource) is closed explicitly via a PHP_VERSION_ID check
+* examples: a full set of scenarios — payment form (`paymentForm`), API (`initPaymentApi`), 54-FZ receipt via `CashItem` (`receipt`), webhook (`webhook`), `getPayment` (`paymentInfo`), refund (`refund`), two-stage (`twoStagePayment`), subscriptions (`subscriptions`), SBP payouts (`payout`), account reference calls (`accountInfo`), advance-offset receipt (`offsetAdvance`); added an `examples/README.md` index
+* examples: connection settings and order data separated — `config.php` (domain, project/account keys, login) and `order.php` (order data); secrets are read from the environment (`UNITPAY_SECRET_KEY`, `UNITPAY_LOGIN`, `UNITPAY_ACCOUNT_SECRET_KEY`) instead of being hardcoded
+* examples: robustness — `require` via `__DIR__` (independent of the working directory), `exit` after `header('Location:')`, `api()`/`form()` calls wrapped in try/catch (`UnitpayExceptionInterface`); `webhook` returns `application/json` and no longer leaves an empty response for an unknown method (`default` in the switch)
+* examples: removed the unreachable "refund" handler branch; added a "preauth" branch (hold notification — acknowledge receipt but do not deliver goods, that waits for "pay"); handling of the "response" reply type from initPayment (e.g. recurring/subscription charges without a redirect)
+* Added a PHPUnit test suite and injectable seams (getIp / API transport) for testability
+* Added QA tooling: phpstan, php-cs-fixer, phpmd and parallel-lint
+* Native type declarations: parameters, return types and typed properties across all three classes (`CashItem`, `UnitpayIpAllowlist`, `UnitPay`) within the PHP 7.4 limits (no union types, `mixed`, or `declare(strict_types)`) — the public API and behavior are unchanged. Money and quantity parameters (`form()` `$sum`, `CashItem` `$count`/`$price`, and the `httpGet()` `string|false` return) are deliberately left untyped to preserve the previous "soft" scalar ergonomics; their types are still documented in PHPDoc. PHPStan raised from level 5 to level 6
+* Minimum PHP version raised to 7.4
+* Hardening from code review:
+  * `api()`: folds in only the fluent-setter parameters (cashItems/customerEmail/customerPhone/backUrl), not the whole set — a reused instance no longer leaks the key `form()` parameters or the stale signature into an unrelated `api()` call
+  * `setCashItems()`: throws on a json_encode failure (e.g. a product name that is not UTF-8) instead of silently attaching an empty 54-FZ receipt
+  * `CashItem`: preserves a fractional count (weight/volume goods) instead of truncating to int
+  * `form()`: throws on an empty secret instead of returning an unsigned URL — like `api()`/`checkHandlerRequest()`
+  * `getSignature()`/`api()`/`form()`: format float parameters locale-independently, so a comma-separator locale on PHP <8.0 cannot corrupt the signature or the amount
+  * `api()`: an empty explicit secretKey (e.g. a getenv() that did not resolve) falls back to the instance key instead of throwing
+  * `httpGet()`: suppresses the file_get_contents warning so a URL containing the secret does not leak into the error log
+  * `checkHandlerRequest()`: exposes the verified method/params via `getHandlerMethod()`/`getHandlerParams()`, so the consumer does not re-read $_GET
+  * every SDK exception implements UnitpayExceptionInterface (UnitpayValidationException was added for the missing-parameter/secret/method cases)
 
-### v2.0.6 от 14.05.2025
+### v2.0.6 — 2025-05-14
 
-* Добавлен новый поддерживаемый IP-адрес Unitpay
-* Обновлён README.md
+* Added a new supported Unitpay IP address
+* Updated README.md
 
-### v2.0.5 от 04.02.2022
+### v2.0.5 — 2022-02-04
 
-* Обновлён список IP-адресов Unitpay
-* Обновлены ссылки на документацию
-* Улучшены качество и структура кода
+* Updated the list of Unitpay IP addresses
+* Updated documentation links
+* Improved code quality and structure
 
-### v2.0.4 от 17.03.2021
+### v2.0.4 — 2021-03-17
 
-* Обновлён метод `getSignature` (2Garin)
+* Updated the `getSignature` method (2Garin)
 
-### v2.0.3 от 20.02.2021
+### v2.0.3 — 2021-02-20
 
-* Фильтрация входных параметров подписи (удаление полей sign/signature перед подписанием)
+* Filtering of signature input parameters (removing the sign/signature fields before signing)
 
-### v2.0.2 от 31.08.2020
+### v2.0.2 — 2020-08-31
 
-* Добавлены параметры nds, type и paymentMethod в `CashItem`
+* Added the nds, type and paymentMethod parameters to `CashItem`
 
-### v2.0.1 от 03.03.2020
+### v2.0.1 — 2020-03-03
 
-* Добавлен выбор домена в примерах
+* Added domain selection in the examples
 
-### v2.0.0 от 03.03.2020
+### v2.0.0 — 2020-03-03
 
-* Добавлен выбор домена (настраиваемый домен API)
-* Обновлён URL документации
+* Added domain selection (configurable API domain)
+* Updated the documentation URL
 
-### v1.1.2 от 15.06.2018
+### v1.1.2 — 2018-06-15
 
-* Исправлено исключение array_merge («Argument #1 is not an array»), когда чек не задан
+* Fixed the array_merge exception ("Argument #1 is not an array") when no receipt is set
 
-### v1.1.1 от 08.02.2018
+### v1.1.1 — 2018-02-08
 
-* Добавлен файл LICENSE
-* Исправлен файл composer
+* Added a LICENSE file
+* Fixed the composer file
 
-### v1.1.0 от 01.08.2017
+### v1.1.0 — 2017-08-01
 
-* Добавлены customerEmail, customerPhone и cashItems в платёжную форму
+* Added customerEmail, customerPhone and cashItems to the payment form
 
-### v1.0.0 от 10.04.2017
+### v1.0.0 — 2017-04-10
 
-* Первый публичный релиз Unitpay PHP SDK
-* Переход на подписи SHA-256 для всех методов (поддержка MD5 удалена)
-* Добавлен API-метод getPayment и пример orderInfo.php
-* secretKey стал обязательным параметром для вызовов API
-* billingCode переименован в paymentType
-* statusUrl объявлен устаревшим в пользу receiptUrl
-* Добавлена поддержка метода обработчика партнёра "error"
-* Добавлен переопределяемый метод `getIp()`
+* First public release of the Unitpay PHP SDK
+* Switched to SHA-256 signatures for all methods (MD5 support removed)
+* Added the getPayment API method and the orderInfo.php example
+* secretKey became a required parameter for API calls
+* billingCode renamed to paymentType
+* statusUrl deprecated in favor of receiptUrl
+* Added support for the partner handler method "error"
+* Added an overridable `getIp()` method
