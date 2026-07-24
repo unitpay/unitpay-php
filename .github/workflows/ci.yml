@@ -4,6 +4,14 @@ on:
   push:
     branches: [ master ]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   tests:
@@ -24,7 +32,10 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer update --prefer-dist --no-progress
+        uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
 
       - name: Lint
         run: composer lint
@@ -46,7 +57,10 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer update --prefer-dist --no-progress
+        uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
 
       - name: Code style (php-cs-fixer)
         run: composer cs-check
@@ -56,3 +70,7 @@ jobs:
 
       - name: Mess detection (PHPMD)
         run: composer md
+
+      - name: Security audit (composer)
+        run: composer audit
+        continue-on-error: true
