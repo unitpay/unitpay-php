@@ -26,6 +26,9 @@
     "ext-curl": "Enables the default cURL transport for api(): connect/read timeouts and no dependency on allow_url_fopen. Falls back to file_get_contents when absent."
   },
   "autoload":{
+    "psr-4": {
+      "Unitpay\\": "src/"
+    },
     "classmap":[
       "./UnitPay.php"
     ]
@@ -37,7 +40,7 @@
   },
   "scripts": {
     "test": "phpunit",
-    "lint": "parallel-lint UnitPay.php examples tests",
+    "lint": "parallel-lint UnitPay.php src examples tests",
     "stan": "phpstan analyse --no-progress",
     "cs-check": "php-cs-fixer fix --dry-run --diff",
     "cs-fix": "php-cs-fixer fix",
