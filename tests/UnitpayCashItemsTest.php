@@ -2,41 +2,46 @@
 
 namespace Tests;
 
-use CashItem;
-use UnitPay;
 use PHPUnit\Framework\TestCase;
+use Unitpay\Exception\UnitpayValidationException;
+use Unitpay\Model\CashItem;
+use Unitpay\Model\Enum\Measure;
+use Unitpay\Model\Enum\Nds;
+use Unitpay\Model\Enum\PaymentMethod;
+use Unitpay\Model\Enum\PaymentObject;
+use Unitpay\Unitpay;
 
-final class UnitPayCashItemsTest extends TestCase
+final class UnitpayCashItemsTest extends TestCase
 {
     /**
-     * setCashItems() stores base64(json(...)) in params; the only public way to read
-     * it back is via the form's query string, so we decode it from there.
+     * setCashItems() stores base64(json(...)) in the pending params; the only public way
+     * to read it back is via the form's query string, so we decode it from there.
      *
      * @return array<int, array<string, mixed>>
      */
-    private function serializedItems(UnitPay $unitPay): array
+    private function serializedItems(Unitpay $unitpay): array
     {
-        $url = $unitPay->form('pk', 1, 'acc', 'desc');
-        parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+        $url = $unitpay->form('pk', 1, 'acc', 'desc');
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
-        return json_decode(base64_decode($q['cashItems']), true);
+        return json_decode(base64_decode((string) $query['cashItems']), true);
     }
 
     public function testRequiredFieldsAreAlwaysSerialized(): void
     {
-        $unitPay = new UnitPay('unitpay.ru', 'secret');
-        $unitPay->setCashItems([
+        $unitpay = new Unitpay('unitpay.ru', 'secret');
+        $unitpay->setCashItems([
             new CashItem(
                 'Coffee',
                 2,
                 150.5,
-                CashItem::NDS_20,
-                CashItem::PAYMENT_OBJECT_COMMODITY,
-                CashItem::PAYMENT_METHOD_PAYMENT_FULL
+                Nds::VAT20,
+                PaymentObject::COMMODITY,
+                PaymentMethod::PAYMENT_FULL
             ),
         ]);
 
-        $items = $this->serializedItems($unitPay);
+        $items = $this->serializedItems($unitpay);
 
         $this->assertCount(1, $items);
         $this->assertSame('Coffee', $items[0]['name']);
@@ -49,10 +54,10 @@ final class UnitPayCashItemsTest extends TestCase
 
     public function testOptionalFieldsAreOmittedWhenNotSet(): void
     {
-        $unitPay = new UnitPay('unitpay.ru', 'secret');
-        $unitPay->setCashItems([new CashItem('X', 1, 10.0)]);
+        $unitpay = new Unitpay('unitpay.ru', 'secret');
+        $unitpay->setCashItems([new CashItem('X', 1, 10.0)]);
 
-        $items = $this->serializedItems($unitPay);
+        $items = $this->serializedItems($unitpay);
 
         foreach (['sum', 'currency', 'measure', 'nomenclatureCode', 'markCode', 'markQuantity', 'pre_text', 'post_text'] as $optional) {
             $this->assertArrayNotHasKey($optional, $items[0], "Optional key '$optional' must be absent when unset");
@@ -64,17 +69,17 @@ final class UnitPayCashItemsTest extends TestCase
         $item = new CashItem('Y', 1, 10.5);
         $item->setSum(10.5)
             ->setCurrency('USD')
-            ->setMeasure(CashItem::MEASURE_KG)
+            ->setMeasure(Measure::KG)
             ->setNomenclatureCode('NC-1')
             ->setMarkCode('MC-1')
             ->setPreText('pre')
             ->setPostText('post')
             ->setMarkQuantity(1, 2);
 
-        $unitPay = new UnitPay('unitpay.ru', 'secret');
-        $unitPay->setCashItems([$item]);
+        $unitpay = new Unitpay('unitpay.ru', 'secret');
+        $unitpay->setCashItems([$item]);
 
-        $items = $this->serializedItems($unitPay);
+        $items = $this->serializedItems($unitpay);
 
         $this->assertSame(10.5, $items[0]['sum']);
         $this->assertSame('USD', $items[0]['currency']);
@@ -88,13 +93,13 @@ final class UnitPayCashItemsTest extends TestCase
 
     public function testMultipleItemsKeepTheirOrder(): void
     {
-        $unitPay = new UnitPay('unitpay.ru', 'secret');
-        $unitPay->setCashItems([
+        $unitpay = new Unitpay('unitpay.ru', 'secret');
+        $unitpay->setCashItems([
             new CashItem('A', 1, 1.5),
             new CashItem('B', 2, 2.5),
         ]);
 
-        $items = $this->serializedItems($unitPay);
+        $items = $this->serializedItems($unitpay);
 
         $this->assertCount(2, $items);
         $this->assertSame('A', $items[0]['name']);
@@ -107,10 +112,10 @@ final class UnitPayCashItemsTest extends TestCase
      */
     public function testSetCashItemsThrowsOnNonUtf8Name(): void
     {
-        $unitPay = new UnitPay('unitpay.ru', 'secret');
+        $unitpay = new Unitpay('unitpay.ru', 'secret');
 
-        $this->expectException(\UnitpayValidationException::class);
+        $this->expectException(UnitpayValidationException::class);
         $this->expectExceptionMessage('Failed to encode cashItems');
-        $unitPay->setCashItems([new CashItem("\xB0Coffee", 1, 100.0)]);
+        $unitpay->setCashItems([new CashItem("\xB0Coffee", 1, 100.0)]);
     }
 }

@@ -1,13 +1,18 @@
 <?php
 
-namespace Tests;
+namespace Tests\Webhook;
 
 use InvalidArgumentException;
-use UnexpectedValueException;
-use UnitPay;
 use PHPUnit\Framework\TestCase;
+use UnexpectedValueException;
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Exception\UnitpayIpException;
+use Unitpay\Exception\UnitpaySignatureException;
+use Unitpay\Signature\SignatureBuilder;
+use Unitpay\Unitpay;
+use Unitpay\Webhook\WebhookVerifier;
 
-final class UnitPayHandlerTest extends TestCase
+final class WebhookVerifierTest extends TestCase
 {
     public const SECRET = 'secret';
     public const ALLOWED_IP = '31.186.100.49';
@@ -40,15 +45,18 @@ final class UnitPayHandlerTest extends TestCase
      */
     private function sign(array $params, string $method): string
     {
-        return (new UnitPay('unitpay.ru', self::SECRET))->getSignature($params, $method);
+        return (new SignatureBuilder())->build($params, self::SECRET, $method);
     }
 
     /**
+     * The verifier as a consumer gets it — wired by the facade, with the inbound request
+     * and sender IP injected instead of read from the superglobals.
+     *
      * @param array<string, mixed> $request
      */
-    private function handler(array $request, string $ip = self::ALLOWED_IP, ?string $secret = self::SECRET): UnitPay
+    private function handler(array $request, string $ip = self::ALLOWED_IP, ?string $secret = self::SECRET): WebhookVerifier
     {
-        return new UnitPay('unitpay.ru', $secret, null, $request, $ip);
+        return (new Unitpay('unitpay.ru', $secret, null, $request, $ip))->webhook();
     }
 
     public function testValidSignatureAndAllowedIpPass(): void
@@ -110,10 +118,10 @@ final class UnitPayHandlerTest extends TestCase
     {
         $request = $this->validRequest('preauth', ['isPreauth' => '1']);
 
-        $unitPay = $this->handler($request);
+        $webhook = $this->handler($request);
 
-        $this->assertTrue($unitPay->checkHandlerRequest());
-        $this->assertSame('preauth', $unitPay->getHandlerMethod());
+        $this->assertTrue($webhook->checkHandlerRequest());
+        $this->assertSame('preauth', $webhook->getHandlerMethod());
     }
 
     /**
@@ -152,66 +160,66 @@ final class UnitPayHandlerTest extends TestCase
     public function testSetAllowedIpsOverridesTheDefaultAllowlist(): void
     {
         $customIp = '203.0.113.7'; // TEST-NET-3, not in the default list
-        $unitPay = $this->handler($this->validRequest('pay'), $customIp);
-        $unitPay->setAllowedIps([$customIp]);
+        $webhook = $this->handler($this->validRequest('pay'), $customIp);
+        $webhook->setAllowedIps([$customIp]);
 
-        $this->assertTrue($unitPay->checkHandlerRequest());
+        $this->assertTrue($webhook->checkHandlerRequest());
     }
 
     /** 127.0.0.1 is NOT trusted by default: behind a proxy on the same host it would nullify the IP check. */
     public function testLocalhostIsRejectedByDefault(): void
     {
-        $unitPay = $this->handler($this->validRequest('pay'), '127.0.0.1');
+        $webhook = $this->handler($this->validRequest('pay'), '127.0.0.1');
 
-        $this->expectException(\UnitpayIpException::class);
-        $unitPay->checkHandlerRequest();
+        $this->expectException(UnitpayIpException::class);
+        $webhook->checkHandlerRequest();
     }
 
     /** setAllowedIps accepts CIDR subnets, not just exact IPs. */
     public function testCidrAllowlistMatchesAddressInRange(): void
     {
-        $unitPay = $this->handler($this->validRequest('pay'), '203.0.113.55');
-        $unitPay->setAllowedIps(['203.0.113.0/24']);
+        $webhook = $this->handler($this->validRequest('pay'), '203.0.113.55');
+        $webhook->setAllowedIps(['203.0.113.0/24']);
 
-        $this->assertTrue($unitPay->checkHandlerRequest());
+        $this->assertTrue($webhook->checkHandlerRequest());
     }
 
     public function testCidrAllowlistRejectsAddressOutOfRange(): void
     {
-        $unitPay = $this->handler($this->validRequest('pay'), '203.0.114.1');
-        $unitPay->setAllowedIps(['203.0.113.0/24']);
+        $webhook = $this->handler($this->validRequest('pay'), '203.0.114.1');
+        $webhook->setAllowedIps(['203.0.113.0/24']);
 
-        $this->expectException(\UnitpayIpException::class);
-        $unitPay->checkHandlerRequest();
+        $this->expectException(UnitpayIpException::class);
+        $webhook->checkHandlerRequest();
     }
 
     /** CIDR matching works for IPv6 too (binary comparison via inet_pton). */
     public function testCidrAllowlistMatchesIpv6InRange(): void
     {
-        $unitPay = $this->handler($this->validRequest('pay'), '2001:db8::1');
-        $unitPay->setAllowedIps(['2001:db8::/32']);
+        $webhook = $this->handler($this->validRequest('pay'), '2001:db8::1');
+        $webhook->setAllowedIps(['2001:db8::/32']);
 
-        $this->assertTrue($unitPay->checkHandlerRequest());
+        $this->assertTrue($webhook->checkHandlerRequest());
     }
 
     /** Before the first successful verification, the verified-data getters return null. */
     public function testHandlerGettersAreNullBeforeVerification(): void
     {
-        $unitPay = $this->handler($this->validRequest('pay'));
+        $webhook = $this->handler($this->validRequest('pay'));
 
-        $this->assertNull($unitPay->getHandlerMethod());
-        $this->assertNull($unitPay->getHandlerParams());
+        $this->assertNull($webhook->getHandlerMethod());
+        $this->assertNull($webhook->getHandlerParams());
     }
 
     /** After a successful verification, getHandlerParams() returns exactly the verified webhook params. */
     public function testGetHandlerParamsReturnsVerifiedParams(): void
     {
         $request = $this->validRequest('pay');
-        $unitPay = $this->handler($request);
+        $webhook = $this->handler($request);
 
-        $this->assertTrue($unitPay->checkHandlerRequest());
-        $this->assertSame($request['params'], $unitPay->getHandlerParams());
-        $this->assertSame('42', $unitPay->getHandlerParams()['account']);
+        $this->assertTrue($webhook->checkHandlerRequest());
+        $this->assertSame($request['params'], $webhook->getHandlerParams());
+        $this->assertSame('42', $webhook->getHandlerParams()['account']);
     }
 
     /** A typed exception that still extends the historical SPL type + the marker interface. */
@@ -223,9 +231,9 @@ final class UnitPayHandlerTest extends TestCase
         try {
             $this->handler($request)->checkHandlerRequest();
             $this->fail('expected a signature exception');
-        } catch (\UnitpaySignatureException $e) {
+        } catch (UnitpaySignatureException $e) {
             $this->assertInstanceOf(InvalidArgumentException::class, $e);
-            $this->assertInstanceOf(\UnitpayExceptionInterface::class, $e);
+            $this->assertInstanceOf(UnitpayExceptionInterface::class, $e);
         }
     }
 }

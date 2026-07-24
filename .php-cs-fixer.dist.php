@@ -1,8 +1,7 @@
 <?php
 
 $finder = (new PhpCsFixer\Finder())
-    ->in([__DIR__ . '/src', __DIR__ . '/tests', __DIR__ . '/examples'])
-    ->append([__DIR__ . '/UnitPay.php']);
+    ->in([__DIR__ . '/src', __DIR__ . '/tests', __DIR__ . '/examples']);
 
 return (new PhpCsFixer\Config())
     ->setRiskyAllowed(false)

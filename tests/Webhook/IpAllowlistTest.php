@@ -1,21 +1,21 @@
 <?php
 
-namespace Tests;
+namespace Tests\Webhook;
 
-use UnitpayIpAllowlist;
 use PHPUnit\Framework\TestCase;
+use Unitpay\Webhook\IpAllowlist;
 
 /**
- * Direct tests of IP-to-allowlist matching. contains() is security-critical but has so
- * far been exercised only indirectly through checkHandlerRequest(); here we pin down the
+ * Direct tests of IP-to-allowlist matching. contains() is security-critical but is
+ * otherwise exercised only indirectly through checkHandlerRequest(); here we pin down the
  * edge cases (address-family mismatch, oversized prefix length, malformed client IP)
  * that are hard to express through the full handler path.
  */
-final class UnitpayIpAllowlistTest extends TestCase
+final class IpAllowlistTest extends TestCase
 {
-    private function matcher(): UnitpayIpAllowlist
+    private function matcher(): IpAllowlist
     {
-        return new UnitpayIpAllowlist(['31.186.100.49', '203.0.113.0/24', '2001:db8::/32']);
+        return new IpAllowlist(['31.186.100.49', '203.0.113.0/24', '2001:db8::/32']);
     }
 
     public function testExactIpv4AddressMatches(): void
@@ -49,10 +49,10 @@ final class UnitpayIpAllowlistTest extends TestCase
      */
     public function testExactIpv6MatchesRegardlessOfTextualForm(): void
     {
-        $upper = new UnitpayIpAllowlist(['2001:DB8::1']);
+        $upper = new IpAllowlist(['2001:DB8::1']);
         $this->assertTrue($upper->contains('2001:db8::1'));
 
-        $expanded = new UnitpayIpAllowlist(['2001:db8:0:0:0:0:0:1']);
+        $expanded = new IpAllowlist(['2001:db8:0:0:0:0:0:1']);
         $this->assertTrue($expanded->contains('2001:db8::1'));
     }
 
@@ -68,7 +68,7 @@ final class UnitpayIpAllowlistTest extends TestCase
      */
     public function testIpv4ClientAgainstIpv6OnlySubnetDoesNotMatch(): void
     {
-        $matcher = new UnitpayIpAllowlist(['2001:db8::/32']);
+        $matcher = new IpAllowlist(['2001:db8::/32']);
 
         $this->assertFalse($matcher->contains('203.0.113.55'));
     }
@@ -76,7 +76,7 @@ final class UnitpayIpAllowlistTest extends TestCase
     /** A prefix longer than the address itself (/33 for IPv4) cannot match anything. */
     public function testPrefixWiderThanAddressDoesNotMatch(): void
     {
-        $matcher = new UnitpayIpAllowlist(['203.0.113.0/33']);
+        $matcher = new IpAllowlist(['203.0.113.0/33']);
 
         $this->assertFalse($matcher->contains('203.0.113.5'));
     }
@@ -84,26 +84,72 @@ final class UnitpayIpAllowlistTest extends TestCase
     /** /25 subnet boundary: an address above the range's upper bound is not included. */
     public function testCidrBoundaryIsRespected(): void
     {
-        $matcher = new UnitpayIpAllowlist(['77.75.153.0/25']);
+        $matcher = new IpAllowlist(['77.75.153.0/25']);
 
         $this->assertTrue($matcher->contains('77.75.153.127'));
         $this->assertFalse($matcher->contains('77.75.153.128'));
+    }
+
+    // --- isValidEntry() --------------------------------------------------------
+
+    /**
+     * @dataProvider validEntries
+     */
+    public function testIsValidEntryAcceptsWellFormedEntries(string $entry): void
+    {
+        $this->assertTrue(IpAllowlist::isValidEntry($entry));
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public function validEntries(): array
+    {
+        return [
+            'ipv4'      => ['31.186.100.49'],
+            'ipv6'      => ['2001:db8::1'],
+            'ipv4 cidr' => ['203.0.113.0/24'],
+            'ipv6 cidr' => ['2001:db8::/32'],
+        ];
+    }
+
+    /**
+     * @dataProvider invalidEntries
+     */
+    public function testIsValidEntryRejectsMalformedEntries(string $entry): void
+    {
+        $this->assertFalse(IpAllowlist::isValidEntry($entry));
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public function invalidEntries(): array
+    {
+        return [
+            'garbage'           => ['garbage'],
+            'out of range'      => ['999.999.999.999'],
+            'empty bits'        => ['203.0.113.0/'],
+            'non-digit bits'    => ['203.0.113.0/abc'],
+            'ipv4 bits too big' => ['203.0.113.0/33'],
+            'ipv6 bits too big' => ['2001:db8::/129'],
+        ];
     }
 
     // --- parseWebhooksFeed() ---------------------------------------------------
 
     public function testParseWebhooksFeedReturnsDedupedList(): void
     {
-        $body = json_encode(['webhooks' => ['1.1.1.1', '1.1.1.1', '2.2.2.2']]);
+        $body = (string) json_encode(['webhooks' => ['1.1.1.1', '1.1.1.1', '2.2.2.2']]);
 
-        $this->assertSame(['1.1.1.1', '2.2.2.2'], UnitpayIpAllowlist::parseWebhooksFeed($body));
+        $this->assertSame(['1.1.1.1', '2.2.2.2'], IpAllowlist::parseWebhooksFeed($body));
     }
 
     public function testParseWebhooksFeedKeepsOnlyValidEntries(): void
     {
-        $body = json_encode(['webhooks' => ['203.0.113.0/24', 'garbage', '2001:db8::1']]);
+        $body = (string) json_encode(['webhooks' => ['203.0.113.0/24', 'garbage', '2001:db8::1']]);
 
-        $this->assertSame(['203.0.113.0/24', '2001:db8::1'], UnitpayIpAllowlist::parseWebhooksFeed($body));
+        $this->assertSame(['203.0.113.0/24', '2001:db8::1'], IpAllowlist::parseWebhooksFeed($body));
     }
 
     /**
@@ -111,7 +157,7 @@ final class UnitpayIpAllowlistTest extends TestCase
      */
     public function testParseWebhooksFeedReturnsNullForUnusableInput(string $body): void
     {
-        $this->assertNull(UnitpayIpAllowlist::parseWebhooksFeed($body));
+        $this->assertNull(IpAllowlist::parseWebhooksFeed($body));
     }
 
     /**
@@ -120,10 +166,10 @@ final class UnitpayIpAllowlistTest extends TestCase
     public function unusableFeeds(): array
     {
         return [
-            'empty string'        => [''],
-            'malformed json'      => ['this is not json'],
-            'missing webhooks'    => ['{"foo":1}'],
-            'webhooks not array'  => ['{"webhooks":42}'],
+            'empty string'         => [''],
+            'malformed json'       => ['this is not json'],
+            'missing webhooks'     => ['{"foo":1}'],
+            'webhooks not array'   => ['{"webhooks":42}'],
             'only invalid entries' => ['{"webhooks":["garbage","999.999.999.999"]}'],
         ];
     }

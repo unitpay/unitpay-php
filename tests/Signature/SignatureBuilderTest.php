@@ -1,32 +1,41 @@
 <?php
 
-namespace Tests;
+namespace Tests\Signature;
 
-use UnitPay;
-use UnitpayValidationException;
 use PHPUnit\Framework\TestCase;
+use Unitpay\Exception\UnitpayValidationException;
+use Unitpay\Signature\SignatureBuilder;
 
-final class UnitPaySignatureTest extends TestCase
+final class SignatureBuilderTest extends TestCase
 {
-    private UnitPay $unitPay;
+    private const SECRET = 'secret';
+
+    private SignatureBuilder $signature;
 
     protected function setUp(): void
     {
-        $this->unitPay = new UnitPay('unitpay.ru', 'secret');
+        $this->signature = new SignatureBuilder();
     }
 
     /**
-     * Defense-in-depth: getSignature() is public, so a direct call with no secret must
+     * Convenience wrapper pinning the secret, so each case reads as the payload it signs.
+     * @param array<array-key, mixed> $params
+     */
+    private function sign(array $params, ?string $method = null): string
+    {
+        return $this->signature->build($params, self::SECRET, $method);
+    }
+
+    /**
+     * Defense-in-depth: build() is a public entry point, so a call with no secret must
      * throw rather than silently hash with an empty secret (the appended null coerces to
      * '' and drops out, yielding a plausible but secret-less signature).
      */
     public function testEmptySecretIsRejected(): void
     {
-        $unitPay = new UnitPay('unitpay.ru', null);
-
         $this->expectException(UnitpayValidationException::class);
         $this->expectExceptionMessage('SecretKey is null');
-        $unitPay->getSignature(['a' => '1']);
+        $this->signature->build(['a' => '1'], null);
     }
 
     public function testSignatureMatchesDocumentedFormula(): void
@@ -34,15 +43,15 @@ final class UnitPaySignatureTest extends TestCase
         // sha256( <ksort-sorted values>{up}secretKey )
         $this->assertSame(
             hash('sha256', '1{up}secret'),
-            $this->unitPay->getSignature(['a' => '1'])
+            $this->sign(['a' => '1'])
         );
     }
 
     public function testSignatureIsIndependentOfKeyOrder(): void
     {
         $this->assertSame(
-            $this->unitPay->getSignature(['a' => '1', 'b' => '2']),
-            $this->unitPay->getSignature(['b' => '2', 'a' => '1'])
+            $this->sign(['a' => '1', 'b' => '2']),
+            $this->sign(['b' => '2', 'a' => '1'])
         );
     }
 
@@ -55,7 +64,7 @@ final class UnitPaySignatureTest extends TestCase
     {
         $this->assertSame(
             hash('sha256', 'pay{up}1{up}2{up}3{up}secret'),
-            $this->unitPay->getSignature(['c' => '3', 'a' => '1', 'b' => '2'], 'pay')
+            $this->sign(['c' => '3', 'a' => '1', 'b' => '2'], 'pay')
         );
     }
 
@@ -63,19 +72,19 @@ final class UnitPaySignatureTest extends TestCase
     {
         $this->assertSame(
             hash('sha256', 'pay{up}1{up}secret'),
-            $this->unitPay->getSignature(['a' => '1'], 'pay')
+            $this->sign(['a' => '1'], 'pay')
         );
         $this->assertNotSame(
-            $this->unitPay->getSignature(['a' => '1']),
-            $this->unitPay->getSignature(['a' => '1'], 'pay')
+            $this->sign(['a' => '1']),
+            $this->sign(['a' => '1'], 'pay')
         );
     }
 
     public function testCallerSuppliedSignatureKeysAreStripped(): void
     {
         $this->assertSame(
-            $this->unitPay->getSignature(['a' => '1']),
-            $this->unitPay->getSignature(['a' => '1', 'sign' => 'x', 'signature' => 'y'])
+            $this->sign(['a' => '1']),
+            $this->sign(['a' => '1', 'sign' => 'x', 'signature' => 'y'])
         );
     }
 
@@ -88,8 +97,8 @@ final class UnitPaySignatureTest extends TestCase
     public function testPhpIntMaxKeyIsStrippedAndSecretRetained(): void
     {
         $this->assertSame(
-            $this->unitPay->getSignature(['a' => '1']),
-            $this->unitPay->getSignature([PHP_INT_MAX => 'evil', 'a' => '1'])
+            $this->sign(['a' => '1']),
+            $this->sign([PHP_INT_MAX => 'evil', 'a' => '1'])
         );
     }
 
@@ -104,15 +113,39 @@ final class UnitPaySignatureTest extends TestCase
             throw new \RuntimeException($errstr, $errno);
         });
         try {
-            $signature = $this->unitPay->getSignature(['a' => ['nested']], 'pay');
+            $signature = $this->sign(['a' => ['nested']], 'pay');
         } finally {
             restore_error_handler();
         }
 
         // '' is substituted for the array, so it matches a param with an empty value.
         $this->assertSame(
-            $this->unitPay->getSignature(['a' => ''], 'pay'),
+            $this->sign(['a' => ''], 'pay'),
             $signature
         );
+    }
+
+    /**
+     * floatToString()/stringifyFloats() are locale-independent: (string) $float honors
+     * LC_NUMERIC on PHP <8.0 and would yield "100,5" in comma locales, breaking the
+     * signature/URL match.
+     */
+    public function testFloatToStringDropsTrailingZeros(): void
+    {
+        $this->assertSame('100.5', SignatureBuilder::floatToString(100.5));
+        $this->assertSame('100', SignatureBuilder::floatToString(100.0));
+    }
+
+    public function testStringifyFloatsConvertsOnlyFloats(): void
+    {
+        $params = SignatureBuilder::stringifyFloats([
+            'sum'     => 100.5,
+            'count'   => 2,
+            'account' => 'acc',
+        ]);
+
+        $this->assertSame('100.5', $params['sum']);
+        $this->assertSame(2, $params['count']);
+        $this->assertSame('acc', $params['account']);
     }
 }
