@@ -8,55 +8,64 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/payments/create-payment
  */
 
-require_once('./orderInfo.php');
-require_once('../UnitPay.php');
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/order.php';
+require_once __DIR__ . '/../UnitPay.php';
 
 $unitpay = new UnitPay($domain, $secretKey);
 
 /**
  * Base params: account, desc, sum, currency, projectId, paymentType
- * Additional params:
- *  Qiwi, Mc:
- *      phone
- * alfaClick:
- *      clientId
+ * paymentType is a payment method code from the reference (UnitPay::PAYMENT_TYPE_* constants):
+ *   card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney.
  *
  * @link https://help.unitpay.ru/payments/create-payment
  * @link https://help.unitpay.ru/book-of-reference/payment-system-codes
  */
-$response = $unitpay->api('initPayment', [
-    'account' => $orderId,
-    'desc' => $orderDesc,
-    'sum' => $orderSum,
-    'paymentType' => 'yandex',
-    'currency' => $orderCurrency,
-    'projectId' => $projectId,
-]);
+try {
+    $response = $unitpay->api('initPayment', [
+        'account' => $orderId,
+        'desc' => $orderDesc,
+        'sum' => $orderSum,
+        'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
+        'currency' => $orderCurrency,
+        'projectId' => $projectId,
+    ]);
 
-// If need user redirect on Payment Gate
-if (isset($response->result->type)
-    && $response->result->type === 'redirect') {
-    // Url on PaymentGate
-    $redirectUrl = $response->result->redirectUrl;
-    // Payment ID in Unitpay (you can save it)
-    $paymentId = $response->result->paymentId;
-    // User redirect
-    header("Location: " . $redirectUrl);
+    // The initPayment response comes in three types: redirect, invoice, response.
+    switch ($response->result->type ?? null) {
+        case 'redirect':
+            // paymentId is in $response->result->paymentId; save it on your side.
+            if (isset($response->result->redirectUrl)) {
+                header('Location: ' . $response->result->redirectUrl);
+                exit;
+            }
+            var_dump($response);
+            break;
 
-// If without redirect (invoice)
-} elseif (isset($response->result->type)
-    && $response->result->type === 'invoice') {
-    // Url on receipt page in Unitpay
-    $receiptUrl = $response->result->receiptUrl;
-    // Payment ID in Unitpay (you can save it)
-    $paymentId = $response->result->paymentId;
-    // Invoice Id in Payment Gate (you can save it)
-    $invoiceId = $response->result->invoiceId;
-    // User redirect
-    header("Location: " . $receiptUrl);
+        case 'invoice':
+            // Besides receiptUrl, $response->result->paymentId and ->invoiceId are available.
+            if (isset($response->result->receiptUrl)) {
+                header('Location: ' . $response->result->receiptUrl);
+                exit;
+            }
+            var_dump($response);
+            break;
 
-// If error during api request
-} elseif (isset($response->error->message)) {
-    $error = $response->error->message;
-    print 'Error: '.$error;
+        case 'response':
+            // No redirect (e.g. a recurring charge); the status is in ->statusUrl.
+            print $response->result->message ?? '';
+            break;
+
+        default:
+            // No type — usually an API-level error.
+            if (isset($response->error->message)) {
+                print 'Error: ' . $response->error->message;
+            } else {
+                var_dump($response);
+            }
+    }
+} catch (UnitpayExceptionInterface $exception) {
+    // SDK-side failure: network, disabled allow_url_fopen, malformed JSON, etc.
+    print 'SDK error: ' . $exception->getMessage();
 }

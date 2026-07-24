@@ -1,218 +1,92 @@
 # Unitpay PHP SDK
 
-PHP SDK for [Unitpay.ru](https://unitpay.ru).
+[![CI](https://github.com/unitpay/php-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/unitpay/php-sdk/actions/workflows/ci.yml)
+[![Latest Stable Version](https://img.shields.io/packagist/v/unitpay/php-sdk.svg)](https://packagist.org/packages/unitpay/php-sdk)
+[![PHP Version](https://img.shields.io/packagist/php-v/unitpay/php-sdk.svg)](https://packagist.org/packages/unitpay/php-sdk)
+[![Total Downloads](https://img.shields.io/packagist/dt/unitpay/php-sdk.svg)](https://packagist.org/packages/unitpay/php-sdk)
+[![License](https://img.shields.io/packagist/l/unitpay/php-sdk.svg)](LICENSE.md)
 
-Documentation https://help.unitpay.ru
+> PHP SDK for the [Unitpay.ru](https://unitpay.ru) payment REST API.
 
-## Examples ##
+A thin, stateless SDK: build a signed redirect to Unitpay's hosted payment page or call
+the API server-to-server, attach 54-FZ fiscal receipts, and verify inbound webhooks. The
+whole library is a single file in the **global namespace**.
 
-These are just some quick examples. Check out the samples
-in [`/examples`](https://github.com/unitpay/php-sdk/blob/master/examples).
+Official Unitpay documentation: [help.unitpay.ru](https://help.unitpay.ru)
 
-### Payment integration using Unitpay form
+## Requirements
+
+* PHP >= 7.4
+* ext-json
+
+No runtime dependencies. The SDK is a single file — [`UnitPay.php`](UnitPay.php) —
+exposing two classes in the **global namespace**: `UnitPay` and `CashItem`.
+
+## Installation
+
+```sh
+composer require unitpay/php-sdk
+```
+
+Then load the Composer autoloader — its classmap registers both `UnitPay` and `CashItem`:
+
+```php
+require __DIR__ . '/vendor/autoload.php';
+```
+
+See [Getting Started](docs/getting-started.md) for the `dev-master` and direct-download
+options.
+
+## Quick Start
 
 ```php
 <?php
-include ('../UnitPay.php');
+require __DIR__ . '/vendor/autoload.php';
 
-// Project Data
-$domain = 'unitpay.ru';// Your working domain: unitpay.ru or address provided by unitpay support service
-$secretKey  = '9e977d0c0e1bc8f5cc9775a8cc8744f1';// Project secret key
-$publicId   = '15155-ae12d';
-
-// My item Info
-$itemName = 'Iphone 6 Skin Cover';
-
-// My Order Data
-$orderId        = 'a183f94-1434-1e44';
-$orderSum       = 900;
-$orderDesc      = 'Payment for item "' . $itemName . '"';
-$orderCurrency  = 'RUB';
-
-$unitpay = new UnitPay($domain, $secretKey);
+$unitpay = new UnitPay('unitpay.ru', $secretKey);
 
 $unitpay
     ->setBackUrl('https://domain.com')
     ->setCustomerEmail('customer@domain.com')
-    ->setCustomerPhone('79001235555')
-    ->setCashItems([
-       new CashItem($itemName, 1, $orderSum) 
-    ]);
+    ->setCashItems([new CashItem('Iphone 6 Skin Cover', 1, 900)]);
 
-$redirectUrl = $unitpay->form(
-    $publicId,
-    $orderSum,
-    $orderId,
-    $orderDesc,
-    $orderCurrency
-);
+$redirectUrl = $unitpay->form($publicId, 900, $orderId, 'Payment for item', 'RUB');
 
-header("Location: " . $redirectUrl);
+header('Location: ' . $redirectUrl);
 ```
 
-### Payment integration using Unitpay API
+Prefer a server-to-server call? Use `$unitpay->api('initPayment', [...])` — see
+[Getting Started](docs/getting-started.md).
 
-```php
-<?php
+## Key Features
 
-header('Content-Type: text/html; charset=UTF-8');
+* **Hosted form or API** — `form()` builds a signed redirect URL; `api('initPayment', ...)`
+  does a server-to-server call.
+* **54-FZ fiscal receipts** — attach `CashItem` line items to any payment.
+* **Secure webhooks** — `checkHandlerRequest()` trusts a callback only when both the
+  SHA-256 signature **and** the source-IP allowlist pass.
+* **Dynamic IP allowlist** — refresh Unitpay's webhook IPs from the published feed,
+  fail-safe.
+* **Typed exceptions** — all implement `UnitpayExceptionInterface`.
+* **Zero dependencies** — one file, `ext-json` only (`ext-curl` optional).
 
-/**
- * API integration
- *
- * @link https://help.unitpay.ru/payments/create-payment
- */
+## Documentation
 
-include ('../UnitPay.php');
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | Requirements, installation, first payment (form / API) |
+| [Fiscal Receipts](docs/receipts.md) | 54-FZ receipt line items via `CashItem` |
+| [API Methods](docs/api-methods.md) | Full `api()` method reference and account-level calls |
+| [Webhooks](docs/webhooks.md) | Payment handler + keeping the IP allowlist fresh |
+| [Telemetry](docs/telemetry.md) | Anonymous SDK version fingerprint |
 
-// Project Data
-$domain = 'unitpay.ru';// Your working domain: unitpay.ru or address provided by unitpay support service
-$projectId  = 1;
-$secretKey  = '9e977d0c0e1bc8f5cc9775a8cc8744f1';// Project secret key
+Runnable samples for every method group live in [`examples/`](examples).
 
-// My item Info
-$itemName = 'Iphone 6 Skin Cover';
+## Contributing
 
-// My Order Data
-$orderId        = 'a183f94-1434-1e44';
-$orderSum       = 900;
-$orderDesc      = 'Payment for item "'.$itemName.'"';
-$orderCurrency  = 'RUB';
+Please feel free to contribute to this project! Pull requests and feature requests
+welcome!
 
-$unitpay = new UnitPay($domain, $secretKey);
+## License
 
-/**
- * Base params: account, desc, sum, currency, projectId, paymentType
- * Additional params:
- *  Qiwi, Mc:
- *      phone
- * alfaClick:
- *      clientId
- *
- * @link https://help.unitpay.ru/payments/create-payment
- */
-$response = $unitpay->api('initPayment', [
-    'account'     => $orderId,
-    'desc'        => $orderDesc,
-    'sum'         => $orderSum,
-    'paymentType' => 'yandex',
-    'currency'    => $orderCurrency,
-    'projectId'   => $projectId
-]);
-
-// If need user redirect on Payment Gate
-if (isset($response->result->type)
-    && $response->result->type == 'redirect') {
-    // Url on PaymentGate
-    $redirectUrl = $response->result->redirectUrl;
-    // Payment ID in Unitpay (you can save it)
-    $paymentId = $response->result->paymentId;
-    // User redirect
-    header("Location: " . $redirectUrl);
-
-// If without redirect (invoice)
-} elseif (isset($response->result->type)
-    && $response->result->type == 'invoice') {
-    // Url on receipt page in Unitpay
-    $receiptUrl = $response->result->receiptUrl;
-    // Payment ID in Unitpay (you can save it)
-    $paymentId = $response->result->paymentId;
-    // Invoice Id in Payment Gate (you can save it)
-    $invoiceId = $response->result->invoiceId;
-    // User redirect
-    header("Location: " . $receiptUrl);
-
-// If error during api request
-} elseif (isset($response->error->message)) {
-    $error = $response->error->message;
-    print 'Error: '.$error;
-}
-```
-
-### Handler sample
-
-```php
-<?php
-
-/**
- *  Demo handler for your projects
- *
- */
-include ('../UnitPay.php');
-
-// Project Data
-$domain = 'unitpay.ru';// Your working domain: unitpay.ru or address provided by unitpay support service
-$projectId  = 1;
-$secretKey  = '9e977d0c0e1bc8f5cc9775a8cc8744f1';// Project secret key
-
-// My item Info
-$itemName = 'Iphone 6 Skin Cover';
-
-// My Order Data
-$orderId        = 'a183f94-1434-1e44';
-$orderSum       = 900;
-$orderDesc      = 'Payment for item "' . $itemName . '"';
-$orderCurrency  = 'RUB';
-
-$unitpay = new UnitPay($domain, $secretKey);
-
-try {
-    // Validate request (check ip address, signature and etc)
-    $unitpay->checkHandlerRequest();
-
-    list($method, $params) = [$_GET['method'], $_GET['params']];
-
-    // Very important! Validate request with your order data, before complete order
-    if (
-        $params['orderSum'] != $orderSum ||
-        $params['orderCurrency'] != $orderCurrency ||
-        $params['account'] != $orderId ||
-        $params['projectId'] != $projectId
-    ) {
-        // logging data and throw exception
-        throw new InvalidArgumentException('Order validation Error!');
-    }
-    switch ($method) {
-        // Just check order (check server status, check order in DB and etc)
-        case 'check':
-            echo $unitpay->getSuccessHandlerResponse('Check Success. Ready to pay.');
-            break;
-        // Method Pay means that the money received
-        case 'pay':
-            // Please complete order
-            echo $unitpay->getSuccessHandlerResponse('Pay Success');
-            break;
-        // Method Error means that an error has occurred.
-        case 'error':
-            // Please log error text.
-            echo $unitpay->getSuccessHandlerResponse('Error logged');
-            break;
-    }
-// Oops! Something went wrong.
-} catch (Exception $e) {
-    echo $unitpay->getErrorHandlerResponse($e->getMessage());
-}
-```
-
-## Installation
-
-### Install composer package
-Set up `composer.json` in your project directory:
-```
-{
-  "require":{"unitpay/php-sdk":"dev-master"}
-}
-```
-
-Run [composer](https://getcomposer.org/doc/00-intro.md#installation):
-```sh
-$ php composer.phar install
-```
-
-### Direct download
-
-Download [latest version](https://github.com/unitpay/php-sdk/archive/master.zip), unzip and copy to your project folder.
-
-## Contributing ##
-
-Please feel free to contribute to this project! Pull requests and feature requests welcome!
+MIT — see [LICENSE.md](LICENSE.md).

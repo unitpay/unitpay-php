@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: json, curl
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
+
+      - name: Lint
+        run: composer lint
+
+      - name: Tests
+        run: composer test
+
+  quality:
+    name: Static analysis & code style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: json, curl
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: highest
+          composer-options: "--prefer-dist"
+
+      - name: Code style (php-cs-fixer)
+        run: composer cs-check
+
+      - name: Static analysis (PHPStan)
+        run: composer stan
+
+      - name: Mess detection (PHPMD)
+        run: composer md
+
+      - name: Security audit (composer)
+        run: composer audit
+        continue-on-error: true
