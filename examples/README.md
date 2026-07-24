@@ -1,50 +1,50 @@
-# Примеры
+# Examples
 
-Готовые сценарии интеграции с Unitpay. Примеры читают `$_GET`/`$_SERVER` и вызывают
-`header()`, поэтому их запускают по HTTP, а не из CLI:
+Ready-made Unitpay integration scenarios. The examples read `$_GET`/`$_SERVER` and call
+`header()`, so they must be served over HTTP, not run from the CLI:
 
 ```sh
 php -S localhost:8000 -t examples
-# затем откройте, например, http://localhost:8000/paymentInfo.php
+# then open e.g. http://localhost:8000/paymentInfo.php
 ```
 
-## Настройки
+## Configuration
 
-Общие данные вынесены в два подключаемых файла (сами по себе не запускаются):
+Shared data lives in two include files (not runnable on their own):
 
-- [config.php](config.php) — подключение и ключи: `domain`, `projectId`, `publicId`,
-  `secretKey`, а также `login`/`accountSecretKey` для методов уровня кабинета.
-- [order.php](order.php) — данные заказа: `orderId`, `orderSum`, `orderDesc`,
-  `orderCurrency`. Подключается примерами с оплатой в дополнение к `config.php`.
+- [config.php](config.php) — connection and keys: `domain`, `projectId`, `publicId`,
+  `secretKey`, plus `login`/`accountSecretKey` for account-level methods.
+- [order.php](order.php) — order data: `orderId`, `orderSum`, `orderDesc`,
+  `orderCurrency`. Included by payment examples in addition to `config.php`.
 
-Секреты не хранятся в коде — читаются из окружения (с заглушками по умолчанию):
+Secrets are not stored in code — they are read from the environment (with default placeholders):
 
 ```sh
-export UNITPAY_SECRET_KEY=...            # ключ проекта
-export UNITPAY_LOGIN=...                 # login кабинета (методы уровня кабинета)
-export UNITPAY_ACCOUNT_SECRET_KEY=...    # ключ кабинета
+export UNITPAY_SECRET_KEY=...            # project key
+export UNITPAY_LOGIN=...                 # account login (account-level methods)
+export UNITPAY_ACCOUNT_SECRET_KEY=...    # account key
 ```
 
-## Сценарии
+## Scenarios
 
-| Файл | Сценарий |
+| File | Scenario |
 | --- | --- |
-| [paymentForm.php](paymentForm.php) | Платёжная форма на стороне Unitpay: `form()` строит URL на страницу оплаты; fluent-сеттеры (`setBackUrl`/`setCustomerEmail`/`setCustomerPhone`). |
-| [initPaymentApi.php](initPaymentApi.php) | Server-to-server `initPayment`: обработка ответа `redirect` / `invoice` / `response`. |
-| [receipt.php](receipt.php) | Фискальный чек по 54-ФЗ: позиции через `CashItem` + `setCashItems()`. |
-| [webhook.php](webhook.php) | Обработчик вебхуков: проверка подписи и IP, ответы `check`/`pay`/`preauth`/`error`. |
-| [paymentInfo.php](paymentInfo.php) | Информация о платеже (`getPayment`). |
-| [refund.php](refund.php) | Возврат платежа, полный или частичный (`refundPayment`). |
-| [twoStagePayment.php](twoStagePayment.php) | Двухстадийный платёж: `confirmPayment` (списание) / `cancelPayment` (разблокировка). |
-| [subscriptions.php](subscriptions.php) | Подписки: список, информация, закрытие. |
-| [payout.php](payout.php) | Выплаты (mass-payment) по СБП + статус. |
-| [accountInfo.php](accountInfo.php) | Справочные вызовы (только для чтения): баланс, комиссии, курсы валют, BIN, способы оплаты. |
-| [offsetAdvance.php](offsetAdvance.php) | Чек зачёта аванса (`offsetAdvance`) — создаёт фискальный чек по предоплате. |
+| [paymentForm.php](paymentForm.php) | Unitpay-hosted payment form: `form()` builds the URL to the payment page; fluent setters (`setBackUrl`/`setCustomerEmail`/`setCustomerPhone`). |
+| [initPaymentApi.php](initPaymentApi.php) | Server-to-server `initPayment`: handling the `redirect` / `invoice` / `response` reply. |
+| [receipt.php](receipt.php) | 54-FZ fiscal receipt: line items via `CashItem` + `setCashItems()`. |
+| [webhook.php](webhook.php) | Webhook handler: signature and IP verification, `check`/`pay`/`preauth`/`error` responses. |
+| [paymentInfo.php](paymentInfo.php) | Payment info (`getPayment`). |
+| [refund.php](refund.php) | Payment refund, full or partial (`refundPayment`). |
+| [twoStagePayment.php](twoStagePayment.php) | Two-stage payment: `confirmPayment` (capture) / `cancelPayment` (release). |
+| [subscriptions.php](subscriptions.php) | Subscriptions: list, info, close. |
+| [payout.php](payout.php) | Payouts (mass-payment) via SBP + status. |
+| [accountInfo.php](accountInfo.php) | Reference calls (read-only): balance, commissions, currency rates, BIN, payment methods. |
+| [offsetAdvance.php](offsetAdvance.php) | Advance-offset receipt (`offsetAdvance`) — creates a fiscal receipt for a prepayment. |
 
-## Обработчик вебхуков локально
+## Webhook handler locally
 
-По умолчанию `127.0.0.1` не доверенный. Только для локальной отладки повторов вебхука
-с того же хоста включите его явным флагом (и **никогда** — в продакшене):
+By default `127.0.0.1` is not trusted. For local debugging of webhook retries from the same
+host only, enable it with an explicit flag (and **never** in production):
 
 ```sh
 UNITPAY_DEBUG_LOCAL=1 php -S localhost:8000 -t examples
