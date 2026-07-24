@@ -9,11 +9,14 @@
  * @link https://help.unitpay.ru/payments/create-payment-easy
  */
 
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Unitpay;
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/order.php';
-require_once __DIR__ . '/../UnitPay.php';
 
-$unitpay = new UnitPay($domain, $secretKey);
+$unitpay = new Unitpay($domain, $secretKey);
 
 try {
     $redirectUrl = $unitpay

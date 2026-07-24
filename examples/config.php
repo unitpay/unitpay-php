@@ -12,7 +12,8 @@ $publicId  = '15155-ae12d';
 $secretKey = getenv('UNITPAY_SECRET_KEY') ?: 'set-me-in-env';
 
 // Account: account-level methods (payouts, getPartner, commissions, currency rates, BIN,
-// offsetAdvance) authenticate with the ACCOUNT key + login, not the project key.
-// Pass them explicitly to api() to override the project key from the constructor.
+// offsetAdvance) authenticate with the ACCOUNT key + login, not the project key. The login
+// is the method's first argument; the key goes in the options array as 'secretKey' and
+// overrides the project key from the constructor.
 $login            = getenv('UNITPAY_LOGIN') ?: 'partner@example.com';
 $accountSecretKey = getenv('UNITPAY_ACCOUNT_SECRET_KEY') ?: 'set-account-key-in-env';

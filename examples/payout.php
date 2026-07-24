@@ -4,42 +4,50 @@ header('Content-Type: text/html; charset=UTF-8');
 
 /**
  * Payouts (mass-payment). Account-level API: authenticates with the ACCOUNT key +
- * login, not the project key. The account key is passed explicitly in the api()
- * parameters and overrides the project key from the constructor.
+ * login, not the project key. The login is the first argument of every payout method,
+ * and the account key goes in the options array, overriding the project key from the
+ * constructor.
  *
  * @link https://help.unitpay.ru/api/create_payout
  * @link https://help.unitpay.ru/api/payout_info
  * @link https://help.unitpay.ru/api/poluchenie-spravochnika-bankov-uchastnikov-sbp-api
  */
 
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Model\Enum\PaymentType;
+use Unitpay\Unitpay;
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/../UnitPay.php';
 
-$unitpay = new UnitPay($domain, $secretKey);
+$unitpay = new Unitpay($domain, $secretKey);
 
-$account = ['login' => $login, 'secretKey' => $accountSecretKey];
+$accountKey = ['secretKey' => $accountSecretKey];
 $transactionId = 'payout-1782'; // unique on your side
 
 try {
+    $payouts = $unitpay->payouts();
+
     // SBP member banks: memberId is required for SBP payouts.
-    $banks = $unitpay->api('getSbpBankList', $account);
+    $banks = $payouts->getSbpBankList($login, $accountKey);
     var_dump($banks->result ?? $banks->error ?? $banks);
 
     // Create a payout to the recipient via SBP.
-    $response = $unitpay->api('massPayment', $account + [
-        'transactionId' => $transactionId,
-        'sum'           => 100,
-        'purse'         => '79510000071',
-        'paymentType'   => 'sbp',
-        'memberId'      => '100000000004', // from getSbpBankList; SBP only
-    ]);
+    $response = $payouts->massPayment(
+        $login,
+        $transactionId,
+        100,
+        '79510000071',
+        PaymentType::SBP,
+        $accountKey + ['memberId' => '100000000004'] // memberId from getSbpBankList; SBP only
+    );
 
     if (isset($response->result)) {
         $payoutId = $response->result->payoutId;
         $status = $response->result->status; // success | not_completed
 
         // Later — check the payout status by your transactionId.
-        $info = $unitpay->api('massPaymentStatus', $account + ['transactionId' => $transactionId]);
+        $info = $payouts->massPaymentStatus($login, $transactionId, $accountKey);
         var_dump($info->result ?? $info->error ?? $info);
     } elseif (isset($response->error->message)) {
         print 'Error: ' . $response->error->message;

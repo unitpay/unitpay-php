@@ -11,19 +11,22 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/api/cancel-payment
  */
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/../UnitPay.php';
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Unitpay;
 
-$unitpay = new UnitPay($domain, $secretKey);
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/config.php';
+
+$unitpay = new Unitpay($domain, $secretKey);
 
 $paymentId = 3403575;
 
 try {
     // Capture the held funds.
-    $response = $unitpay->api('confirmPayment', ['paymentId' => $paymentId]);
+    $response = $unitpay->payments()->confirmPayment($paymentId);
 
     // ...or release without capturing.
-    // $response = $unitpay->api('cancelPayment', ['paymentId' => $paymentId]);
+    // $response = $unitpay->payments()->cancelPayment($paymentId);
 
     if (isset($response->message)) {
         print $response->message;

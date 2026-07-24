@@ -8,15 +8,19 @@ header('Content-Type: text/html; charset=UTF-8');
  * authenticates with the ACCOUNT key + login, passed explicitly.
  */
 
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Unitpay;
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/../UnitPay.php';
 
-$unitpay = new UnitPay($domain, $secretKey);
+$unitpay = new Unitpay($domain, $secretKey);
 
-$account = ['login' => $login, 'secretKey' => $accountSecretKey];
+// The account key overrides the project key from the constructor.
+$accountKey = ['secretKey' => $accountSecretKey];
 
 try {
-    $response = $unitpay->api('offsetAdvance', $account + ['paymentId' => 3403575]);
+    $response = $unitpay->payments()->offsetAdvance($login, 3403575, $accountKey);
     var_dump($response->result ?? $response->error ?? $response);
 } catch (UnitpayExceptionInterface $exception) {
     print 'SDK error: ' . $exception->getMessage();

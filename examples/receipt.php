@@ -4,21 +4,30 @@ header('Content-Type: text/html; charset=UTF-8');
 
 /**
  * 54-FZ fiscal receipt: line items are described by CashItem objects and attached to
- * the payment via setCashItems(). The receipt goes out with the next form()/api() call
+ * the payment via setCashItems(). The receipt goes out with the next form()/service call
  * and is cleared after a successful call. For the customer to receive the receipt, set
  * their contact (email and/or phone) via setCustomerEmail()/setCustomerPhone().
  *
- * The dictionaries of VAT rates (NDS_*), payment objects (PAYMENT_OBJECT_*), payment
- * methods (PAYMENT_METHOD_*) and units of measure (MEASURE_*) are CashItem constants.
+ * The dictionaries of VAT rates, payment objects, payment methods and units of measure
+ * are const-classes under Unitpay\Model\Enum: Nds, PaymentObject, PaymentMethod, Measure.
  *
  * @link https://help.unitpay.ru/payments/create-payment
  */
 
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Model\CashItem;
+use Unitpay\Model\Enum\Measure;
+use Unitpay\Model\Enum\Nds;
+use Unitpay\Model\Enum\PaymentMethod;
+use Unitpay\Model\Enum\PaymentObject;
+use Unitpay\Model\Enum\PaymentType;
+use Unitpay\Unitpay;
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/order.php';
-require_once __DIR__ . '/../UnitPay.php';
 
-$unitpay = new UnitPay($domain, $secretKey);
+$unitpay = new Unitpay($domain, $secretKey);
 
 // Line item 1: a commodity. Constructor args: name, count, price, nds, payment object,
 // payment method. Since 2026 the backend fiscalizes vat20 as 22% — pick per the real receipt.
@@ -26,21 +35,21 @@ $item = new CashItem(
     $itemName,
     1,
     900,
-    CashItem::NDS_20,
-    CashItem::PAYMENT_OBJECT_COMMODITY,
-    CashItem::PAYMENT_METHOD_PAYMENT_FULL
+    Nds::VAT20,
+    PaymentObject::COMMODITY,
+    PaymentMethod::PAYMENT_FULL
 );
 // Optional fields are serialized only when set (e.g. unit of measure):
-$item->setMeasure(CashItem::MEASURE_ITEM);
+$item->setMeasure(Measure::ITEM);
 
 // Line item 2: a service (delivery), no VAT.
 $delivery = new CashItem(
     'Доставка',
     1,
     150,
-    CashItem::NDS_NONE,
-    CashItem::PAYMENT_OBJECT_SERVICE,
-    CashItem::PAYMENT_METHOD_PAYMENT_FULL
+    Nds::NONE,
+    PaymentObject::SERVICE,
+    PaymentMethod::PAYMENT_FULL
 );
 
 try {
@@ -48,14 +57,17 @@ try {
     $response = $unitpay
         ->setCustomerEmail('customer@example.com')
         ->setCashItems([$item, $delivery])
-        ->api('initPayment', [
-            'account'     => $orderId,
-            'desc'        => $orderDesc,
-            'sum'         => 1050,
-            'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
-            'currency'    => $orderCurrency,
-            'projectId'   => $projectId,
-        ]);
+        ->payments()
+        ->initPayment(
+            $orderId,
+            1050,
+            $projectId,
+            PaymentType::CARD,
+            [
+                'desc'     => $orderDesc,
+                'currency' => $orderCurrency,
+            ]
+        );
 
     // The same receipt can also be attached to the payment form:
     //   $url = $unitpay->setCashItems([$item, $delivery])

@@ -8,29 +8,36 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/payments/create-payment
  */
 
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Model\Enum\PaymentType;
+use Unitpay\Unitpay;
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/order.php';
-require_once __DIR__ . '/../UnitPay.php';
 
-$unitpay = new UnitPay($domain, $secretKey);
+$unitpay = new Unitpay($domain, $secretKey);
 
 /**
- * Base params: account, desc, sum, currency, projectId, paymentType
- * paymentType is a payment method code from the reference (UnitPay::PAYMENT_TYPE_* constants):
+ * initPayment takes its required params as arguments — account, sum, projectId,
+ * paymentType — and everything else (desc, currency, ...) in the options array.
+ * paymentType is a payment method code from the reference (the PaymentType constants):
  *   card, cardInvoice, sbp, sberpay, tinkoffpay, paypal, webmoney.
  *
  * @link https://help.unitpay.ru/payments/create-payment
  * @link https://help.unitpay.ru/book-of-reference/payment-system-codes
  */
 try {
-    $response = $unitpay->api('initPayment', [
-        'account' => $orderId,
-        'desc' => $orderDesc,
-        'sum' => $orderSum,
-        'paymentType' => UnitPay::PAYMENT_TYPE_CARD,
-        'currency' => $orderCurrency,
-        'projectId' => $projectId,
-    ]);
+    $response = $unitpay->payments()->initPayment(
+        $orderId,
+        $orderSum,
+        $projectId,
+        PaymentType::CARD,
+        [
+            'desc'     => $orderDesc,
+            'currency' => $orderCurrency,
+        ]
+    );
 
     // The initPayment response comes in three types: redirect, invoice, response.
     switch ($response->result->type ?? null) {
