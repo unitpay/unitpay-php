@@ -172,11 +172,11 @@ final class UnitPayApiTest extends TestCase
     }
 
     /**
-     * Fluent-setter params are cleared only by a SUCCESSFUL api() call. After a transport
-     * failure they are retained, so a retry goes out with the same receipt rather than
-     * silently without it.
+     * Fluent-setter params are cleared once the request has been attempted — on a transport
+     * failure too, not only on success — so a stale receipt cannot leak into an unrelated
+     * later call on a reused instance. A retry must re-apply the setters (symmetric with form()).
      */
-    public function testFluentSetterParamsAreRetainedAfterFailedApiCall(): void
+    public function testFluentSetterParamsAreClearedAfterFailedApiCall(): void
     {
         $urls = [];
         $calls = 0;
@@ -198,9 +198,9 @@ final class UnitPayApiTest extends TestCase
 
         $unitPay->api('getPayment', ['paymentId' => 2]);
 
-        // The receipt survived the failure and went out with the retry.
+        // The receipt was consumed by the failed call and did NOT leak into the next one.
         $this->assertStringContainsString('cashItems=', $urls[0]);
-        $this->assertStringContainsString('cashItems=', $urls[1]);
+        $this->assertStringNotContainsString('cashItems=', $urls[1]);
     }
 
     public function testNonObjectResponseIsReportedAsTemporaryServerError(): void

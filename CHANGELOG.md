@@ -38,6 +38,7 @@
 * Minimum PHP version raised to 7.4
 * Hardening from code review:
   * `api()`: folds in only the fluent-setter parameters (cashItems/customerEmail/customerPhone/backUrl), not the whole set — a reused instance no longer leaks the key `form()` parameters or the stale signature into an unrelated `api()` call
+  * `api()`: the fluent-setter parameters are now cleared once the request has been attempted — on a transport failure too, not only on success — so a stale receipt/customer can no longer leak from a failed call into an unrelated later call on a reused instance (symmetric with `form()`); a retry after a failure must re-apply the setters
   * `setCashItems()`: throws on a json_encode failure (e.g. a product name that is not UTF-8) instead of silently attaching an empty 54-FZ receipt
   * `CashItem`: preserves a fractional count (weight/volume goods) instead of truncating to int
   * `form()`: throws on an empty secret instead of returning an unsigned URL — like `api()`/`checkHandlerRequest()`
@@ -45,6 +46,8 @@
   * `api()`: an empty explicit secretKey (e.g. a getenv() that did not resolve) falls back to the instance key instead of throwing
   * `httpGet()`: suppresses the file_get_contents warning so a URL containing the secret does not leak into the error log
   * `checkHandlerRequest()`: exposes the verified method/params via `getHandlerMethod()`/`getHandlerParams()`, so the consumer does not re-read $_GET
+  * `getSignature()`: rejects a null/empty secret up front — as a public method it must not silently hash with an empty secret (the appended null would coerce to '' and drop out, yielding a plausible but secret-less signature); the normal `form()`/`checkHandlerRequest()` paths already guarded this, this is defense-in-depth for direct calls
+  * docs: `setAllowedIps([])` is documented as fail-closed (an empty allowlist rejects every webhook rather than being a no-op); the `$transport` seam docblock now documents the `$headers` argument the transport actually receives
   * every SDK exception implements UnitpayExceptionInterface (UnitpayValidationException was added for the missing-parameter/secret/method cases)
 
 ### v2.0.6 — 2025-05-14

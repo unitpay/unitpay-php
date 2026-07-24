@@ -639,7 +639,8 @@ class UnitPay
 
     /**
      * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path (becomes "https://$domain/api").
-     * @param callable|null $transport outbound HTTP transport for api(): fn(string $url): string|false.
+     * @param callable|null $transport outbound HTTP transport for api(): fn(string $url, string[] $headers): string|false.
+     *                                 $headers carries the telemetry fingerprint; a transport may ignore it.
      *                                 Defaults to file_get_contents(). Override to test api() without the network.
      * @param array<string, mixed>|null $request inbound webhook array read by checkHandlerRequest().
      *                                 Defaults to $_GET. Override to test the handler without superglobals.
@@ -663,6 +664,9 @@ class UnitPay
      * NOT touch the merchant IPs added via addAllowedIps() — they remain on top.
      * Use it to keep the SDK current when Unitpay's infrastructure changes without
      * waiting for a release, or to restore a list you fetched and cached yourself.
+     *
+     * Passing an empty array with no addAllowedIps() entries leaves the allowlist empty,
+     * so every webhook is rejected (fail-closed, not a no-op) — pass at least one IP/CIDR.
      * @link https://help.unitpay.ru/book-of-reference/ip-addresses
      * @param string[] $ips
      */
@@ -750,10 +754,18 @@ class UnitPay
      * value (e.g. params[x][]=1), so non-scalars are coerced to '' — implode() emits no
      * warning and verification still fails, because the secret is appended regardless.
      *
+     * A null/empty secret is rejected up front: form()/checkHandlerRequest() already guard
+     * it before calling this, but as a public method it must not silently hash with an empty
+     * secret (is_scalar(null) is false, so the appended key would coerce to '' and drop out).
+     *
      * @param array<array-key, mixed> $params
+     * @throws UnitpayValidationException when the secret key is unset/empty
      */
     public function getSignature(array $params, ?string $method = null): string
     {
+        if (empty($this->secretKey)) {
+            throw new UnitpayValidationException('SecretKey is null');
+        }
         unset($params['sign'], $params['signature'], $params[PHP_INT_MAX]);
         ksort($params);
         $params[] = $this->secretKey;
@@ -952,13 +964,14 @@ class UnitPay
     /**
      * Performs a server-to-server call to the Unitpay REST API. Fluent-setter params
      * are merged in (so setCashItems()->api('initPayment', ...) sends the receipt) and
-     * cleared only by a SUCCESSFUL call. A transport failure keeps them, so a retry
-     * goes out with the same receipt — hence the state is clean only after success:
-     * an unrelated call right AFTER a failure inherits the accumulated params (reset
-     * them explicitly or use a new instance if that is undesirable). Explicit $params
-     * take precedence. An explicit non-empty secretKey in $params overrides the
-     * instance key, so account-level methods (getPartner, getCommissions, payouts, ...)
-     * can use the account key.
+     * then cleared once the request has been attempted — on BOTH success and transport
+     * failure — so a reused instance never carries this call's receipt/customer into the
+     * next one (symmetric with form()). A retry after a failure must re-apply the setters.
+     * (Validation errors thrown before the request — unsupported method, missing param,
+     * empty secret — happen before the attempt, so they leave the accumulated params in
+     * place.) Explicit $params take precedence. An explicit non-empty secretKey in $params
+     * overrides the instance key, so account-level methods (getPartner, getCommissions,
+     * payouts, ...) can use the account key.
      * @param array<string, mixed> $params
      *
      * @throws InvalidArgumentException
@@ -994,14 +1007,19 @@ class UnitPay
             PHP_QUERY_RFC3986
         );
 
-        $response = json_decode($this->httpGet($requestUrl, $this->fingerprintHeaders()));
-        if (!is_object($response)) {
-            throw new UnitpayTransportException('Temporary server error. Please try again later.');
+        // Clear the accumulated fluent-setter params once the request has been attempted,
+        // on both success and transport failure (finally), so a stale receipt/customer never
+        // leaks into an unrelated later call on a reused instance — symmetric with form().
+        try {
+            $response = json_decode($this->httpGet($requestUrl, $this->fingerprintHeaders()));
+            if (!is_object($response)) {
+                throw new UnitpayTransportException('Temporary server error. Please try again later.');
+            }
+
+            return $response;
+        } finally {
+            $this->params = [];
         }
-
-        $this->params = [];
-
-        return $response;
     }
 
     /**

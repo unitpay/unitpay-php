@@ -183,6 +183,20 @@ final class UnitPayAllowedIpsTest extends TestCase
         $this->assertSame(['31.186.100.49', '51.250.20.9'], $unitPay->getAllowedIps());
     }
 
+    /**
+     * setAllowedIps([]) is fail-closed, not a no-op: an empty allowlist (with no
+     * addAllowedIps() entries) rejects every webhook rather than trusting all sources.
+     */
+    public function testEmptyAllowlistRejectsEveryWebhook(): void
+    {
+        $unitPay = new UnitPay('unitpay.ru', self::SECRET, null, $this->validRequest(), self::DEFAULT_IP);
+        $unitPay->setAllowedIps([]);
+
+        $this->assertSame([], $unitPay->getAllowedIps());
+        $this->expectException(UnitpayIpException::class);
+        $unitPay->checkHandlerRequest();
+    }
+
     // --- matcher cache reset ---------------------------------------------
 
     public function testAddAllowedIpsInvalidatesTheMatcherCache(): void

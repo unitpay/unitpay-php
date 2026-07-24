@@ -3,6 +3,7 @@
 namespace Tests;
 
 use UnitPay;
+use UnitpayValidationException;
 use PHPUnit\Framework\TestCase;
 
 final class UnitPaySignatureTest extends TestCase
@@ -12,6 +13,20 @@ final class UnitPaySignatureTest extends TestCase
     protected function setUp(): void
     {
         $this->unitPay = new UnitPay('unitpay.ru', 'secret');
+    }
+
+    /**
+     * Defense-in-depth: getSignature() is public, so a direct call with no secret must
+     * throw rather than silently hash with an empty secret (the appended null coerces to
+     * '' and drops out, yielding a plausible but secret-less signature).
+     */
+    public function testEmptySecretIsRejected(): void
+    {
+        $unitPay = new UnitPay('unitpay.ru', null);
+
+        $this->expectException(UnitpayValidationException::class);
+        $this->expectExceptionMessage('SecretKey is null');
+        $unitPay->getSignature(['a' => '1']);
     }
 
     public function testSignatureMatchesDocumentedFormula(): void
