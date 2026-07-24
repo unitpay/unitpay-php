@@ -69,7 +69,7 @@ try {
     } else {
         var_dump($response);
     }
-} catch (UnitpayExceptionInterface $e) {
+} catch (UnitpayExceptionInterface $exception) {
     // UnitpayValidationException if a line-item name is not UTF-8 (json_encode returns false).
-    print 'SDK error: ' . $e->getMessage();
+    print 'SDK error: ' . $exception->getMessage();
 }

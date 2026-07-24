@@ -72,7 +72,7 @@ try {
             // failure with no diagnostics) — return an error via the shared catch below.
             throw new InvalidArgumentException('Unexpected handler method: ' . $method);
     }
-} catch (Exception $e) {
+} catch (Exception $exception) {
     // Any error (wrong signature, disallowed IP, order mismatch) returns an error to Unitpay.
-    print $unitpay->getErrorHandlerResponse($e->getMessage());
+    print $unitpay->getErrorHandlerResponse($exception->getMessage());
 }

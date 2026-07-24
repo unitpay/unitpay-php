@@ -32,6 +32,6 @@ try {
     } elseif (isset($closed->error->message)) {
         print 'Error: ' . $closed->error->message;
     }
-} catch (UnitpayExceptionInterface $e) {
-    print 'SDK error: ' . $e->getMessage();
+} catch (UnitpayExceptionInterface $exception) {
+    print 'SDK error: ' . $exception->getMessage();
 }

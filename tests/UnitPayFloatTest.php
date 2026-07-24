@@ -13,8 +13,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class UnitPayFloatTest extends TestCase
 {
-    /** @var UnitPay */
-    private $unitPay;
+    private UnitPay $unitPay;
 
     protected function setUp(): void
     {

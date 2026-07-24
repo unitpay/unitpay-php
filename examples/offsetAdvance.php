@@ -18,6 +18,6 @@ $account = ['login' => $login, 'secretKey' => $accountSecretKey];
 try {
     $response = $unitpay->api('offsetAdvance', $account + ['paymentId' => 3403575]);
     var_dump($response->result ?? $response->error ?? $response);
-} catch (UnitpayExceptionInterface $e) {
-    print 'SDK error: ' . $e->getMessage();
+} catch (UnitpayExceptionInterface $exception) {
+    print 'SDK error: ' . $exception->getMessage();
 }

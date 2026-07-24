@@ -65,7 +65,7 @@ try {
                 var_dump($response);
             }
     }
-} catch (UnitpayExceptionInterface $e) {
+} catch (UnitpayExceptionInterface $exception) {
     // SDK-side failure: network, disabled allow_url_fopen, malformed JSON, etc.
-    print 'SDK error: ' . $e->getMessage();
+    print 'SDK error: ' . $exception->getMessage();
 }

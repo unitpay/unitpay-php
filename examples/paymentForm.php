@@ -30,6 +30,6 @@ try {
 
     header("Location: " . $redirectUrl);
     exit;
-} catch (UnitpayExceptionInterface $e) {
-    print 'SDK error: ' . $e->getMessage();
+} catch (UnitpayExceptionInterface $exception) {
+    print 'SDK error: ' . $exception->getMessage();
 }

@@ -7,8 +7,7 @@ use PHPUnit\Framework\TestCase;
 
 final class UnitPaySignatureTest extends TestCase
 {
-    /** @var UnitPay */
-    private $unitPay;
+    private UnitPay $unitPay;
 
     protected function setUp(): void
     {

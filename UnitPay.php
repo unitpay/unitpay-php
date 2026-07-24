@@ -576,7 +576,7 @@ class UnitPay
      * injected and validated in api(), so it is not listed here.
      * @var array<string, string[]>
      */
-    private array $requiredUnitpayMethodsParams = [
+    private const REQUIRED_UNITPAY_METHODS_PARAMS = [
         'initPayment'         => ['account', 'sum', 'projectId', 'paymentType'],
         'getPayment'          => ['paymentId'],
         'refundPayment'       => ['paymentId'],
@@ -603,7 +603,7 @@ class UnitPay
      * verification like the others rather than be rejected as unsupported.
      * @var string[]
      */
-    private array $supportedPartnerMethods = ['check', 'pay', 'preauth', 'error'];
+    private const SUPPORTED_PARTNER_METHODS = ['check', 'pay', 'preauth', 'error'];
     /**
      * Published outbound Unitpay IPs. 127.0.0.1 is deliberately NOT here: behind a
      * reverse proxy on the same host REMOTE_ADDR equals 127.0.0.1, which would turn the
@@ -966,13 +966,13 @@ class UnitPay
      */
     public function api(string $method, array $params = []): object
     {
-        if (!isset($this->requiredUnitpayMethodsParams[$method])) {
+        if (!isset(self::REQUIRED_UNITPAY_METHODS_PARAMS[$method])) {
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 
         $params = array_merge($this->params, $params);
 
-        foreach ($this->requiredUnitpayMethodsParams[$method] as $rParam) {
+        foreach (self::REQUIRED_UNITPAY_METHODS_PARAMS[$method] as $rParam) {
             if (!isset($params[$rParam])) {
                 throw new UnitpayValidationException('Param ' . $rParam . ' is null');
             }
@@ -1032,7 +1032,7 @@ class UnitPay
 
         list($method, $params) = [$request['method'], $request['params']];
 
-        if (!in_array($method, $this->supportedPartnerMethods, true)) {
+        if (!in_array($method, self::SUPPORTED_PARTNER_METHODS, true)) {
             throw new UnitpayUnsupportedMethodException('Method is not supported');
         }
 

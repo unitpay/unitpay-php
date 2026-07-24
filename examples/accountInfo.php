@@ -35,6 +35,6 @@ try {
 
     // Payment methods available on the project: project key, no login.
     var_dump($unitpay->api('getMethodsAvailable', ['projectId' => $projectId])->result ?? null);
-} catch (UnitpayExceptionInterface $e) {
-    print 'SDK error: ' . $e->getMessage();
+} catch (UnitpayExceptionInterface $exception) {
+    print 'SDK error: ' . $exception->getMessage();
 }
