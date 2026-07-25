@@ -61,6 +61,33 @@ an optional `:port`. No scheme, path or query: it is interpolated into the API e
 hosted-form URL and the webhook IP feed, so `https://unitpay.ru` or `unitpay.ru/api` would
 produce broken URLs. Anything else throws `UnitpayValidationException` from the constructor.
 
+### Transport, timeouts and retries
+
+Leave `$transport` null and you get `DefaultTransport::create()`: cURL (falling back to
+`file_get_contents` when `ext-curl` is missing) behind a retry policy. Override it to tune
+either half:
+
+```php
+use Unitpay\Http\CurlTransport;
+use Unitpay\Http\DefaultTransport;
+use Unitpay\Http\RetryingTransport;
+
+// Longer read timeout, still retried.
+new Unitpay('unitpay.ru', $secretKey, new RetryingTransport(new CurlTransport(5, 30)));
+
+// No retries — fail on the first attempt.
+new Unitpay('unitpay.ru', $secretKey, DefaultTransport::withoutRetries());
+```
+
+Both timeouts are in seconds and must be positive; cURL treats 0 as "wait forever", so it
+is rejected at construction rather than at the first request.
+
+**What gets retried is narrow on purpose.** Only a failure that provably never left the
+client — DNS failure, refused connection, connect-phase timeout — is repeated. A read
+timeout, a 5xx, a 409 and a 429 are not, because Unitpay may already have acted on the
+request and the API accepts no idempotency key to make a repeat harmless. The
+`file_get_contents` fallback is never retried: it cannot tell the phases apart.
+
 ## Create a payment (Unitpay hosted form)
 
 `form()` builds a signed redirect URL to Unitpay's hosted payment page. Fluent setters
@@ -190,7 +217,8 @@ if (isset($response->result->type)
 
 ## Testing without the network
 
-The transport sits behind `Unitpay\Http\TransportInterface`, so you can inject a fake and
+The transport sits behind `Unitpay\Http\TransportInterface` — one method,
+`request(string $url, array $headers = []): Response` — so you can inject a fake and
 exercise the SDK without HTTP. The webhook verifier likewise accepts the inbound request
 array and the client IP, instead of reading `$_GET` / `$_SERVER['REMOTE_ADDR']`:
 

@@ -89,7 +89,9 @@ webhook verifier:
   error it keeps the built-in list and never throws. It makes a blocking HTTP request, so
   **don't call it on every webhook**: run it on a schedule (e.g. a daily cron), cache
   `getAllowedIps()`, and feed the cached list back with `setAllowedIps($cached)` in the
-  handler.
+  handler. Since 4.0 the default transport also retries a connect failure twice, so the
+  worst case is roughly `(1 + 2) × timeout` plus backoff — about 32 seconds with the
+  default 10s timeout. Fine on a cron, unacceptable in a handler.
 * `$webhook->addAllowedIps(['1.2.3.4', ...])` adds your own IPs (e.g. a proxy or relay) on
   top of the Unitpay list; they persist across `refreshAllowedIps()`.
 * `$webhook->setAllowedIps([...])` replaces the Unitpay list outright. Passing an empty
@@ -116,6 +118,35 @@ cache_set('unitpay_ips', $ips);
     ->setAllowedIps(cache_get('unitpay_ips'))
     ->checkHandlerRequest();
 ```
+
+## Replay protection
+
+A signature proves a webhook was genuine when it was sent, not that it is genuine now:
+without a freshness check, anyone who captures one request can resend it forever.
+
+`checkHandlerRequest()` therefore also verifies that `params[date]` is within **300
+seconds** of your server clock, and throws `UnitpayReplayException` when it is not. That
+exception extends `UnitpaySignatureException`, so a handler that already rejects on a bad
+signature rejects a replay unchanged.
+
+The order of checks is signature → freshness → source IP. Freshness runs after the
+signature deliberately: an unsigned payload must not be usable to probe how far your clock
+is off.
+
+**Timezone.** Unitpay sends `date` as Moscow time (`Y-m-d H:i:s`, UTC+3). The SDK parses it
+against that fixed offset, never with `strtotime()` — which would resolve it against the
+server's `date.timezone` and reject every webhook on a UTC host, three hours being ten
+times the window. Your server timezone does not matter; your server **clock** does, so run
+NTP.
+
+```php
+$unitpay->webhook()->setWebhookTolerance(900); // 15 minutes, e.g. behind a slow queue
+$unitpay->webhook()->setWebhookTolerance(0);   // off — a captured webhook replays forever
+```
+
+A webhook that carries no `date` is accepted rather than refused. The field is part of the
+signed payload, so an attacker cannot strip it to skip the check: removing any parameter
+changes the hash and the signature check, which runs first, rejects the request.
 
 ## See Also
 

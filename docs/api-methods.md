@@ -7,8 +7,22 @@ takes its required parameters as arguments and everything else in a trailing opt
 array. `secretKey` is added automatically from the constructor. Full parameters and
 response formats are in the [official API documentation](https://help.unitpay.ru).
 
-Every method returns the decoded JSON envelope as `object`, and throws a
-`UnitpayTransportException` when no usable response comes back.
+Every method returns the decoded JSON envelope as `object`. When no usable response comes
+back it throws one of three exceptions, all extending `UnitpayTransportException` — so a
+single `catch (UnitpayTransportException $e)` still covers everything, while the concrete
+class tells you what to do next:
+
+| Exception | Raised when | Carries | Safe to repeat? |
+| --- | --- | --- | --- |
+| `UnitpayNetworkException` | no response arrived — DNS, refused connection, timeout, or `allow_url_fopen` disabled with no ext-curl | `getErrno()`, `getTransportError()` | only if the message says the request was not sent |
+| `UnitpayHttpException` | Unitpay answered with a non-2xx status | `getStatusCode()`, `getResponseBody()` | no — it was processed far enough to produce a status |
+| `UnitpayResponseException` | a 2xx arrived whose body is not a JSON object | `getStatusCode()`, `getResponseBody()` | no — the call was delivered and accepted |
+
+`getResponseBody()` keeps whatever came back, including the HTML error page a gateway
+returns on a 502. That is what Unitpay support will ask you to quote.
+
+A missing or empty secret key still throws `UnitpayValidationException` before any request
+is made.
 
 ## `payments()`
 

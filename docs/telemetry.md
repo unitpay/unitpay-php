@@ -16,8 +16,44 @@ sends secrets, amounts, or customer data:
 
 The webhook IP-feed fetch is a plain GET and carries no fingerprint headers.
 
-That is the whole of it — there is no separate telemetry endpoint, no opt-in beacon, and
-nothing to configure.
+There is no separate telemetry endpoint and no beacon.
+
+## Naming your integration
+
+Most Unitpay integrations are CMS modules, and the fields above cannot tell one from a
+bare script. Three optional slots fix that:
+
+```php
+$unitpay->setCms('Bitrix', '22.0')
+    ->setFramework('Laravel', '11.0')
+    ->setModule('unitpay-bitrix', '3.1');
+```
+
+Each filled slot appears in both headers:
+
+```text
+User-Agent: unitpay-php-sdk/4.0.0 api/v1 Laravel/11.0 Bitrix/22.0 unitpay-bitrix/3.1
+X-Unitpay-Client: {"sdk_version":"4.0.0", ..., "framework":"Laravel/11.0","cms":"Bitrix/22.0","module":"unitpay-bitrix/3.1"}
+```
+
+Set them once, right after construction — they apply to every later service call, including
+through service objects that were already created. An unset slot is omitted rather than sent
+empty, and a slot given a name without a version (or the reverse) throws
+`UnitpayValidationException` instead of emitting a meaningless `Bitrix/` token.
+
+**These are product names and versions you supply.** Nothing is collected from the
+environment beyond what is already listed above, and nothing identifies a merchant, a
+payment or a customer.
+
+## Turning it off
+
+```php
+$unitpay->disableTelemetry();
+```
+
+`X-Unitpay-Client` is then not sent at all. The `User-Agent` keeps `unitpay-php-sdk/<ver>`
+— a request that identifies no library at all is materially harder for Unitpay support to
+help with, so that much stays.
 
 ## See Also
 
