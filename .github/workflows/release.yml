@@ -31,6 +31,25 @@ jobs:
           # one to decide whether it is really the newest version.
           fetch-depth: 0
 
+      - name: Set up PHP
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Verify Unitpay::VERSION matches the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          declared=$(php -r 'require "src/Unitpay.php"; echo Unitpay\Unitpay::VERSION;')
+          expected="${GITHUB_REF_NAME#v}"
+          if [ "$declared" != "$expected" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} declares version '${expected}' but Unitpay::VERSION is '${declared}'. Bump the constant and retag."
+            exit 1
+          fi
+          echo "Unitpay::VERSION=${declared} matches tag ${GITHUB_REF_NAME}"
+
       - name: Extract the CHANGELOG section for this tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |
