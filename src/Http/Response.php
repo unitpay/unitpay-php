@@ -16,8 +16,13 @@ namespace Unitpay\Http;
 final class Response
 {
     /**
-     * Not a cURL errno. Marks a failure raised locally — a missing ext-curl combined with
-     * a disabled allow_url_fopen, or a stream failure the fallback cannot classify.
+     * Not a cURL errno. Marks a failure the transport could not classify — a missing
+     * ext-curl combined with a disabled allow_url_fopen, or a stream failure whose phase
+     * the fallback cannot see.
+     *
+     * It is also a retry instruction: an attempt carrying this errno is never repeated,
+     * because "unknown" is not "not sent" and a repeat could duplicate a delivered
+     * payment. Use it in a custom transport whenever the cause cannot be determined.
      */
     public const ERRNO_LOCAL = -1;
 

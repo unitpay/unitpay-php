@@ -99,14 +99,24 @@ class RetryingTransport implements TransportInterface
     }
 
     /**
-     * The whole safety argument in one expression: a status means the server answered, and
-     * wasRequestSent() means it saw the request even though no status came back. Either
-     * way it may already have acted on it. Do not widen this to cover 5xx or 429 unless
-     * the API gains an idempotency key.
+     * Retry only on positive knowledge that the request never left this client.
+     *
+     * Three conditions, each excluding a way the server may already have acted:
+     *  - a status means it answered;
+     *  - wasRequestSent() means it saw the request even though no status came back;
+     *  - ERRNO_LOCAL means the transport could not classify the failure at all, and
+     *    "unknown" is not "not sent". The file_get_contents fallback reports exactly this:
+     *    it sees no connect/read phase, so a failure there may be a delivered request.
+     *
+     * The last condition is the one that is easy to lose. Dropping it makes a fallback
+     * install repeat a delivered initPayment, and the API accepts no idempotency key to
+     * make that harmless. Do not widen this to cover 5xx or 429 either, for the same reason.
      */
     private function shouldRetry(Response $response): bool
     {
-        return $response->getStatusCode() === 0 && !$response->wasRequestSent();
+        return $response->getStatusCode() === 0
+            && !$response->wasRequestSent()
+            && $response->getErrno() !== Response::ERRNO_LOCAL;
     }
 
     /**

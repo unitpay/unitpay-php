@@ -148,11 +148,13 @@ final class CurlTransport implements TransportInterface
 
         if (!is_string($body)) {
             return Response::failed(
+                // ERRNO_LOCAL is what keeps this attempt from being retried: this path sees
+                // no connect/read phase, so the failure may be a request Unitpay already
+                // processed. The requestSent flag below cannot carry that meaning — false
+                // there asserts "provably not sent", which would license a retry.
                 Response::ERRNO_LOCAL,
                 'The request failed and the file_get_contents fallback cannot report why. '
                 . 'Install ext-curl for a diagnosable transport.',
-                // This path exposes no connect/read phase signal, so the conservative
-                // answer is the only safe one — and it is why it is never retried.
                 false
             );
         }

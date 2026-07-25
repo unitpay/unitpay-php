@@ -90,6 +90,41 @@ final class RetryingTransportTest extends TestCase
         ];
     }
 
+    /**
+     * A transport that cannot classify its own failure must never be retried.
+     *
+     * The file_get_contents fallback is the case that matters: it sees no connect/read
+     * phase, so a failure there may be a request Unitpay already processed. Retrying it
+     * is how a fallback install charges a customer twice, and docs/getting-started.md
+     * states outright that this path is never retried. `false` for "unknown" is not the
+     * same claim as `false` for "provably never sent" — only the latter may be retried.
+     *
+     * @dataProvider unclassifiableFailures
+     */
+    public function testNeverRetriesAFailureTheTransportCouldNotClassify(Response $failure): void
+    {
+        $inner = new FakeTransport($failure, Response::received(200, '{"result":{}}'));
+        $transport = new SleeplessRetryingTransport($inner, 3);
+
+        $transport->request('https://unitpay.test/api?method=initPayment');
+
+        $this->assertSame(1, $inner->callCount());
+        $this->assertSame([], $transport->sleeps());
+    }
+
+    /** @return array<string, array{Response}> */
+    public function unclassifiableFailures(): array
+    {
+        return [
+            'stream fallback failure' => [
+                Response::failed(Response::ERRNO_LOCAL, 'the fallback cannot report why', false),
+            ],
+            'allow_url_fopen disabled' => [
+                Response::failed(Response::ERRNO_LOCAL, 'ext-curl missing and allow_url_fopen off', false),
+            ],
+        ];
+    }
+
     public function testDoesNotRetryASuccess(): void
     {
         $inner = new FakeTransport('{"result":{}}');

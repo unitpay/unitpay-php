@@ -51,19 +51,32 @@ accidentally carry an HTTP 200:
   arrived, whatever its status.
 * `Response::failed(int $errno, string $error, bool $requestSent)` — no response arrived.
 
-### The third argument is a safety decision, not a detail
+### The failure arguments are a safety decision, not a detail
 
-`$requestSent` tells the SDK whether the request had already gone out when the attempt
-failed. It is the only thing the retry policy looks at, because the Unitpay API accepts no
-idempotency key: repeating a delivered `initPayment` can create a second payment.
+The retry policy reads them, and the Unitpay API accepts no idempotency key: repeating a
+delivered `initPayment` can create a second payment. An attempt is repeated only on
+positive knowledge that it never left the client.
 
-**If you cannot tell, pass `false`.** That is the conservative answer — it means the SDK
-never retries through your transport, which costs nothing but a retry.
+`$requestSent` states whether the request had already gone out. Pass `true` when you know
+the bytes went out — a read timeout, for example. Do not infer it from an error code: cURL
+reports the same `CURLE_OPERATION_TIMEDOUT` for a connect timeout and a read timeout, and
+`CurlTransport` has to consult `CURLINFO_CONNECT_TIME` to tell them apart.
 
-Pass `true` only when you know the bytes went out — for example a read timeout. Do not
-infer it from an error code: cURL reports the same `CURLE_OPERATION_TIMEDOUT` for a
-connect timeout and a read timeout, and `CurlTransport` has to consult
-`CURLINFO_CONNECT_TIME` to tell them apart.
+**If you cannot tell, say so with the errno rather than the boolean:**
+
+```php
+// "Something failed and I cannot classify it." Never retried.
+return Response::failed(Response::ERRNO_LOCAL, 'my transport cannot report why', false);
+
+// "Nothing left this machine." Safe to retry.
+return Response::failed(CURLE_COULDNT_CONNECT, 'connection refused', false);
+```
+
+`$requestSent = false` alone means *provably* not sent, which is a claim strong enough to
+license a retry — it is not the place to express uncertainty. `ERRNO_LOCAL` is: it marks a
+failure the transport could not classify, and the SDK never retries one. The SDK's own
+`file_get_contents` fallback uses it for exactly this reason, since it sees no
+connect/read phase.
 
 Your transport should not throw. Describe the outcome in a `Response`; the SDK decides
 which exception it deserves.
