@@ -8,6 +8,7 @@ use Unitpay\Api\PaymentService;
 use Unitpay\Api\PayoutService;
 use Unitpay\Api\ReferenceService;
 use Unitpay\Api\SubscriptionService;
+use Unitpay\Exception\UnitpayValidationException;
 use Unitpay\Model\CashItem;
 use Unitpay\Unitpay;
 use Unitpay\Webhook\WebhookVerifier;
@@ -87,6 +88,62 @@ final class UnitpayFacadeTest extends TestCase
 
         $this->assertArrayNotHasKey('cashItems', $transport->query(0));
         $this->assertArrayHasKey('cashItems', $transport->query(1));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public function validDomainProvider(): array
+    {
+        return [
+            'production'      => ['unitpay.ru'],
+            'test tld'        => ['unitpay.test'],
+            'subdomain'       => ['sandbox.unitpay.ru'],
+            'single label'    => ['localhost'],
+            'host with port'  => ['localhost:8080'],
+            'hyphenated'      => ['my-shop.example.com'],
+        ];
+    }
+
+    /**
+     * @dataProvider validDomainProvider
+     */
+    public function testConstructorAcceptsBareHost(string $domain): void
+    {
+        $this->assertInstanceOf(Unitpay::class, new Unitpay($domain, 'secret'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public function invalidDomainProvider(): array
+    {
+        return [
+            'with scheme'     => ['https://unitpay.ru'],
+            'scheme only'     => ['http://'],
+            'with path'       => ['unitpay.ru/api'],
+            'with query'      => ['unitpay.ru?x=1'],
+            'with fragment'   => ['unitpay.ru#frag'],
+            'with userinfo'   => ['user@unitpay.ru'],
+            'leading space'   => [' unitpay.ru'],
+            'trailing space'  => ['unitpay.ru '],
+            'empty'           => [''],
+            'hyphen edged'    => ['-unitpay.ru'],
+            'double dot'      => ['unitpay..ru'],
+        ];
+    }
+
+    /**
+     * A scheme or path used to sail through and surface later as a transport error or an
+     * allowlist that silently failed to refresh.
+     *
+     * @dataProvider invalidDomainProvider
+     */
+    public function testConstructorRejectsAnythingButABareHost(string $domain): void
+    {
+        $this->expectException(UnitpayValidationException::class);
+        $this->expectExceptionMessage('Domain must be a bare host');
+        new Unitpay($domain, 'secret');
     }
 
     /** The domain given to the constructor drives every endpoint the facade builds. */

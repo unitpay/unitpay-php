@@ -146,10 +146,13 @@ class WebhookVerifier
      *
      * Passing an empty array with no addAllowedIps() entries leaves the allowlist empty,
      * so every webhook is rejected (fail-closed, not a no-op) — pass at least one IP/CIDR.
-     * @param string[] $ips
+     *
+     * @param string[] $ips exact IPs and/or CIDR ranges
+     * @throws UnitpayValidationException on a malformed entry
      */
     public function setAllowedIps(array $ips): self
     {
+        $this->assertValidEntries($ips);
         $this->supportedUnitpayIp = $ips;
         $this->ipAllowlist = null;
         return $this;
@@ -159,13 +162,38 @@ class WebhookVerifier
      * Adds the merchant's own IP/CIDR ranges (e.g. your proxy/relay) on top of the
      * Unitpay list. Preserved across refreshAllowedIps()/setAllowedIps(). Duplicates
      * are removed.
+     *
      * @param string[] $ips exact IPs and/or CIDR ranges
+     * @throws UnitpayValidationException on a malformed entry
      */
     public function addAllowedIps(array $ips): self
     {
+        $this->assertValidEntries($ips);
         $this->customIps = array_values(array_unique(array_merge($this->customIps, $ips)));
         $this->ipAllowlist = null;
         return $this;
+    }
+
+    /**
+     * Rejects malformed allowlist entries up front. The whole call fails, so the allowlist
+     * is never left half-configured.
+     *
+     * The feed path does NOT go through here: refreshAllowedIps() stays fail-safe and drops
+     * bad entries instead of throwing. Only the two manual setters throw.
+     *
+     * @param string[] $ips
+     * @throws UnitpayValidationException
+     */
+    private function assertValidEntries(array $ips): void
+    {
+        foreach ($ips as $entry) {
+            if (!IpAllowlist::isValidEntry($entry)) {
+                throw new UnitpayValidationException(
+                    'Invalid IP allowlist entry: ' . var_export($entry, true)
+                    . '. Expected an IPv4/IPv6 address or a CIDR range like "77.75.153.0/25".'
+                );
+            }
+        }
     }
 
     /**

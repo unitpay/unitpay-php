@@ -43,7 +43,8 @@ final class Unitpay
     private ?ReferenceService $reference = null;
 
     /**
-     * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path.
+     * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path,
+     *                       optionally with a :port.
      * @param TransportInterface|null $transport outbound HTTP transport for api()/feed fetch.
      *                                 Defaults to CurlTransport. Inject a fake to test without the network.
      * @param array<string, mixed>|null $request inbound webhook array read by the webhook
@@ -58,6 +59,7 @@ final class Unitpay
         ?array $request = null,
         ?string $clientIp = null
     ) {
+        $this->assertValidDomain($domain);
         $this->secretKey = $secretKey;
         $this->apiUrl = "https://$domain/api";
         $this->formUrl = "https://$domain/pay/";
@@ -216,6 +218,26 @@ final class Unitpay
             self::VERSION,
             self::API_VERSION
         );
+    }
+
+    /**
+     * Rejects anything that is not a bare host (optionally with a port). The domain is
+     * interpolated into the API, form and IP-feed URLs, so a scheme or path would produce
+     * malformed URLs.
+     *
+     * @throws UnitpayValidationException when $domain is not a bare host
+     */
+    private function assertValidDomain(string $domain): void
+    {
+        // Labels of 1-63 alphanumerics/hyphens (not hyphen-edged), 253 chars total, optional :port.
+        $label = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
+        $host = '(?:' . $label . '\.)*' . $label;
+        if (preg_match('~^(?=.{1,253}(?::|$))' . $host . '(?::\d{1,5})?$~', $domain) !== 1) {
+            throw new UnitpayValidationException(
+                'Domain must be a bare host such as "unitpay.ru", without scheme, path or query, got '
+                . var_export($domain, true)
+            );
+        }
     }
 
     /**
