@@ -56,11 +56,17 @@ a `TransportInterface`, the inbound request array, and the client IP:
 new Unitpay(string $domain, ?string $secretKey = null, ?TransportInterface $transport = null, ?array $request = null, ?string $clientIp = null)
 ```
 
+`$domain` is a **bare host** — `unitpay.ru`, or the address Unitpay support gave you — with
+an optional `:port`. No scheme, path or query: it is interpolated into the API endpoint, the
+hosted-form URL and the webhook IP feed, so `https://unitpay.ru` or `unitpay.ru/api` would
+produce broken URLs. Anything else throws `UnitpayValidationException` from the constructor.
+
 ## Create a payment (Unitpay hosted form)
 
 `form()` builds a signed redirect URL to Unitpay's hosted payment page. Fluent setters
 (`setBackUrl`, `setCustomerEmail`, `setCustomerPhone`, `setCashItems`) are optional and
-apply to both `form()` and the service calls.
+apply to `form()`, `payments()->initPayment()` and `payments()->offsetAdvance()` — see
+[Fluent parameters](api-methods.md#fluent-parameters).
 
 ```php
 <?php

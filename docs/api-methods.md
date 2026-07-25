@@ -88,10 +88,33 @@ Note: `confirmPayment` and `cancelPayment` return a top-level `message`
 ## Fluent parameters
 
 Parameters accumulated by `setCashItems()`, `setCustomerEmail()`, `setCustomerPhone()` and
-`setBackUrl()` are merged into the next call — `form()` or any service method — and cleared
-afterwards, so a reused instance never carries one order's receipt into the next. Explicit
-options take precedence over accumulated ones. The clearing happens even when the request
-fails, so a retry must re-apply the setters.
+`setBackUrl()` are merged into the calls that accept them, and cleared afterwards — so a
+reused instance never carries one order's receipt into the next. Explicit options take
+precedence over accumulated ones. The clearing happens even when the request fails, so a
+retry must re-apply the setters.
+
+Only three calls consume them:
+
+| Call | Consumes |
+| --- | --- |
+| `form()` | `backUrl`, `customerEmail`, `customerPhone`, `cashItems` |
+| `payments()->initPayment()` | `backUrl`, `customerEmail`, `customerPhone`, `cashItems` |
+| `payments()->offsetAdvance()` | `cashItems` |
+
+Every other service method — `getPayment`, `refundPayment`, `confirmPayment`,
+`cancelPayment` and everything on `subscriptions()`, `payouts()` and `reference()` — neither
+receives nor clears them. A lookup issued between the setters and the payment therefore
+leaves the receipt alone:
+
+```php
+$unitpay->setCashItems([$item]);
+
+$unitpay->reference()->getPartner($login);          // no receipt attached, nothing consumed
+$unitpay->payments()->initPayment(...);             // the receipt arrives here
+```
+
+> Before 3.1 every service call drained these params, so the lookup above sent the receipt
+> with `getPartner` and the payment was created without one.
 
 ## See Also
 

@@ -26,7 +26,7 @@ use Unitpay\Webhook\WebhookVerifier;
 final class Unitpay
 {
     /** SDK version; sent in the telemetry fingerprint. Keep in sync with the release git tag. */
-    public const VERSION = '3.0.0';
+    public const VERSION = '3.1.0';
 
     /** Unitpay API surface this SDK targets; sent in the telemetry fingerprint. */
     public const API_VERSION = 'v1';

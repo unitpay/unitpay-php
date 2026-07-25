@@ -4,9 +4,11 @@ header('Content-Type: text/html; charset=UTF-8');
 
 /**
  * 54-FZ fiscal receipt: line items are described by CashItem objects and attached to
- * the payment via setCashItems(). The receipt goes out with the next form()/service call
- * and is cleared after a successful call. For the customer to receive the receipt, set
- * their contact (email and/or phone) via setCustomerEmail()/setCustomerPhone().
+ * the payment via setCashItems(). The receipt goes out with the next call that accepts
+ * one — form(), payments()->initPayment() or payments()->offsetAdvance() — and is cleared
+ * there; other service calls leave it alone, so a lookup in between is harmless. A retry
+ * after a failed call must re-apply the setters. For the customer to receive the receipt,
+ * set their contact (email and/or phone) via setCustomerEmail()/setCustomerPhone().
  *
  * The dictionaries of VAT rates, payment objects, payment methods and units of measure
  * are const-classes under Unitpay\Model\Enum: Nds, PaymentObject, PaymentMethod, Measure.

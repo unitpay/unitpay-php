@@ -95,6 +95,12 @@ webhook verifier:
 * `$webhook->setAllowedIps([...])` replaces the Unitpay list outright. Passing an empty
   array is fail-closed, not a no-op: with no `addAllowedIps()` entries it rejects every
   webhook.
+* Both setters accept exact IPv4/IPv6 addresses and CIDR ranges, and reject anything else
+  with `UnitpayValidationException`. A malformed entry (`'31.186.100.4 9'`,
+  `'31.186.100.0/33'`) would otherwise match nothing and every webhook would fail with a
+  bare `IP address Error`. The whole call is rejected, so the allowlist is never left
+  half-configured. `refreshAllowedIps()` keeps its fail-safe contract instead: it drops bad
+  entries from the feed and never throws.
 * Override `getIp()` if you run behind a proxy (the check uses `REMOTE_ADDR`, not the
   spoofable `X-Forwarded-For`). `getIp()` and `isAllowedIp()` are `protected`, so extend
   `WebhookVerifier` to change them.
