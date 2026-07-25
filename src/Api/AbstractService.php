@@ -2,8 +2,12 @@
 
 namespace Unitpay\Api;
 
+use Unitpay\Exception\UnitpayHttpException;
+use Unitpay\Exception\UnitpayNetworkException;
+use Unitpay\Exception\UnitpayResponseException;
 use Unitpay\Exception\UnitpayTransportException;
 use Unitpay\Exception\UnitpayValidationException;
+use Unitpay\Http\Response;
 use Unitpay\Http\TransportInterface;
 use Unitpay\Signature\SignatureBuilder;
 
@@ -82,13 +86,69 @@ abstract class AbstractService
             PHP_QUERY_RFC3986
         );
 
-        $body = $this->transport->send($requestUrl, $this->fingerprintHeaders());
-        $response = is_string($body) ? json_decode($body) : null;
-        if (!is_object($response)) {
-            throw new UnitpayTransportException('Temporary server error. Please try again later.');
+        return $this->decode($this->transport->request($requestUrl, $this->fingerprintHeaders()));
+    }
+
+    /**
+     * Turns a transport result into the decoded JSON envelope, or into the exception that
+     * describes what actually went wrong. Before 4.0 every branch below collapsed into one
+     * "Temporary server error" — including a disabled allow_url_fopen, which is permanent.
+     *
+     * @throws UnitpayNetworkException  no response arrived
+     * @throws UnitpayHttpException     a response arrived with a non-2xx status
+     * @throws UnitpayResponseException a 2xx arrived whose body is not a JSON object
+     */
+    private function decode(Response $response): object
+    {
+        if ($response->getStatusCode() === 0) {
+            throw new UnitpayNetworkException(
+                $this->networkMessage($response),
+                $response->getErrno(),
+                $response->getTransportError()
+            );
         }
 
-        return $response;
+        if (!$response->isSuccessful()) {
+            throw new UnitpayHttpException(
+                sprintf('Unitpay API returned HTTP %d.', $response->getStatusCode()),
+                $response->getStatusCode(),
+                $response->getBody()
+            );
+        }
+
+        $decoded = json_decode($response->getBody());
+        if (!is_object($decoded)) {
+            throw new UnitpayResponseException(
+                sprintf(
+                    'Unitpay API returned HTTP %d with a body that is not a JSON object (%s).',
+                    $response->getStatusCode(),
+                    json_last_error_msg()
+                ),
+                $response->getStatusCode(),
+                $response->getBody()
+            );
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Whether the request reached Unitpay decides what the caller may safely do next, so
+     * the message says it outright. The API accepts no idempotency key, so a blind repeat
+     * of a delivered initPayment can create a second payment.
+     */
+    private function networkMessage(Response $response): string
+    {
+        $detail = sprintf('%s (error %d)', $response->getTransportError(), $response->getErrno());
+
+        if ($response->wasRequestSent()) {
+            return 'No response from the Unitpay API: ' . $detail
+                . '. The request was sent, so it may already have been processed — check the'
+                . ' payment state before repeating it.';
+        }
+
+        return 'Could not reach the Unitpay API: ' . $detail
+            . '. The request was not sent, so nothing was processed.';
     }
 
     /**

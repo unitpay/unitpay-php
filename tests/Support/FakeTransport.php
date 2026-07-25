@@ -2,37 +2,46 @@
 
 namespace Tests\Support;
 
+use Unitpay\Http\Response;
 use Unitpay\Http\TransportInterface;
 
 /**
  * Test double for the outbound HTTP transport: records every call (URL + headers) and
- * replays a queue of canned bodies, so the SDK can be exercised without the network.
- * Replaces the constructor callable the pre-3.0 suite injected.
+ * replays a queue of canned results, so the SDK can be exercised without the network.
+ *
+ * A queued item may be:
+ *   - a string   → shorthand for HTTP 200 with that body (the common case);
+ *   - false      → shorthand for a connect-phase failure (no response, request not sent);
+ *   - a Response → the full result, needed for status codes, headers, and the read-timeout
+ *                  case where the request DID reach the server.
  */
 final class FakeTransport implements TransportInterface
 {
     /** @var array<int, array{url: string, headers: string[]}> */
     private array $calls = [];
 
-    /** @var array<int, string|false> */
+    /** @var array<int, Response> */
     private array $responses;
 
     /**
-     * @param string|false ...$responses bodies returned by successive send() calls; the
-     *                                   last one is reused once the queue runs out. Pass
-     *                                   false to simulate a transport failure.
+     * @param string|false|Response ...$responses results returned by successive request()
+     *                                            calls; the last one is reused once the
+     *                                            queue runs out.
      */
     public function __construct(...$responses)
     {
-        /** @var array<int, string|false> $responses */
-        $this->responses = $responses === [] ? ['{"result":{}}'] : $responses;
+        if ($responses === []) {
+            $responses = ['{"result":{}}'];
+        }
+
+        /** @var array<int, string|false|Response> $responses */
+        $this->responses = array_map([self::class, 'normalize'], $responses);
     }
 
     /**
      * @param string[] $headers
-     * @return string|false
      */
-    public function send(string $url, array $headers = [])
+    public function request(string $url, array $headers = []): Response
     {
         $this->calls[] = ['url' => $url, 'headers' => $headers];
 
@@ -81,5 +90,22 @@ final class FakeTransport implements TransportInterface
         }
 
         return null;
+    }
+
+    /**
+     * @param string|false|Response $response
+     */
+    private static function normalize($response): Response
+    {
+        if ($response instanceof Response) {
+            return $response;
+        }
+
+        if ($response === false) {
+            // errno 7 = CURLE_COULDNT_CONNECT: the historical meaning of a bare `false`.
+            return Response::failed(7, 'Simulated transport failure', false);
+        }
+
+        return Response::received(200, $response);
     }
 }

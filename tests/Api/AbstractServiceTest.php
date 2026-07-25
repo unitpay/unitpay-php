@@ -5,7 +5,11 @@ namespace Tests\Api;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\FakeTransport;
+use Unitpay\Exception\UnitpayHttpException;
+use Unitpay\Exception\UnitpayNetworkException;
+use Unitpay\Exception\UnitpayResponseException;
 use Unitpay\Exception\UnitpayTransportException;
+use Unitpay\Http\Response;
 use Unitpay\Model\CashItem;
 use Unitpay\Unitpay;
 
@@ -174,15 +178,6 @@ final class AbstractServiceTest extends TestCase
         $this->assertStringContainsString('cashItems=', $transport->url(1));
     }
 
-    public function testNonObjectResponseIsReportedAsTemporaryServerError(): void
-    {
-        $unitpay = new Unitpay('unitpay.test', 'secret', new FakeTransport('this is not json'));
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Temporary server error');
-        $unitpay->payments()->getPayment(1);
-    }
-
     public function testMissingSecretThrows(): void
     {
         $unitpay = new Unitpay('unitpay.test', null, new FakeTransport());
@@ -192,18 +187,126 @@ final class AbstractServiceTest extends TestCase
         $unitpay->payments()->getPayment(1);
     }
 
-    /** A transport failure is a typed exception, still catchable as InvalidArgumentException. */
-    public function testTransportFailureThrowsTypedTransportException(): void
+    /**
+     * A 2xx whose body is not a JSON object is a protocol problem, not a network one:
+     * the server answered, it just did not answer with what the API promises.
+     */
+    public function testNonJsonBodyThrowsResponseException(): void
     {
-        $unitpay = new Unitpay('unitpay.test', 'secret', new FakeTransport(false));
+        $unitpay = new Unitpay('unitpay.test', 'secret', new FakeTransport('this is not json'));
+
+        try {
+            $unitpay->payments()->getPayment(1);
+            $this->fail('expected a response exception');
+        } catch (UnitpayResponseException $e) {
+            $this->assertSame('this is not json', $e->getResponseBody());
+            $this->assertInstanceOf(UnitpayTransportException::class, $e);
+            $this->assertInstanceOf(InvalidArgumentException::class, $e);
+        }
+    }
+
+    /** A connect-phase failure never reached the server; the message must say so. */
+    public function testConnectFailureThrowsNetworkException(): void
+    {
+        $transport = new FakeTransport(Response::failed(7, 'Failed to connect to unitpay.test port 443', false));
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+
+        try {
+            $unitpay->payments()->getPayment(1);
+            $this->fail('expected a network exception');
+        } catch (UnitpayNetworkException $e) {
+            $this->assertSame(7, $e->getErrno());
+            $this->assertNotNull($e->getTransportError());
+            $this->assertStringContainsString('Failed to connect', (string) $e->getTransportError());
+            $this->assertStringContainsString('was not sent', $e->getMessage());
+        }
+    }
+
+    /**
+     * A read timeout carries the same cURL errno as a connect timeout but a completely
+     * different consequence: the server saw the request and may already have created the
+     * payment. The message has to say that out loud — it is the difference between "retry
+     * safely" and "check before retrying".
+     */
+    public function testReadTimeoutSaysTheRequestMayHaveBeenProcessed(): void
+    {
+        $transport = new FakeTransport(Response::failed(28, 'Operation timed out after 10001 milliseconds', true));
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+
+        try {
+            $unitpay->payments()->initPayment('order-1', 100, 7, 'card');
+            $this->fail('expected a network exception');
+        } catch (UnitpayNetworkException $e) {
+            $this->assertSame(28, $e->getErrno());
+            $this->assertStringContainsString('may already have been processed', $e->getMessage());
+            $this->assertStringNotContainsString('was not sent', $e->getMessage());
+        }
+    }
+
+    public function testHttp404ThrowsHttpExceptionCarryingTheStatus(): void
+    {
+        $transport = new FakeTransport(Response::received(404, '{"error":{"message":"Not found"}}'));
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+
+        try {
+            $unitpay->payments()->getPayment(1);
+            $this->fail('expected an http exception');
+        } catch (UnitpayHttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+            $this->assertStringContainsString('404', $e->getMessage());
+        }
+    }
+
+    /**
+     * A 500 with an HTML error page used to be indistinguishable from a timeout. The body
+     * is what an integrator needs to quote in a support ticket, so it must survive.
+     */
+    public function testHttp500CarriesTheResponseBody(): void
+    {
+        $html = '<html><body><h1>502 Bad Gateway</h1></body></html>';
+        $transport = new FakeTransport(Response::received(500, $html));
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+
+        try {
+            $unitpay->payments()->getPayment(1);
+            $this->fail('expected an http exception');
+        } catch (UnitpayHttpException $e) {
+            $this->assertSame(500, $e->getStatusCode());
+            $this->assertSame($html, $e->getResponseBody());
+        }
+    }
+
+    /**
+     * The five cases above are distinct classes now, but a caller that only wants "the
+     * request failed" must still get away with a single catch — and with the pre-4.0
+     * InvalidArgumentException catch it may already have.
+     *
+     * @dataProvider transportFailures
+     * @param string|false|Response $result
+     */
+    public function testEveryTransportFailureIsStillOneCatch($result): void
+    {
+        $unitpay = new Unitpay('unitpay.test', 'secret', new FakeTransport($result));
 
         try {
             $unitpay->payments()->getPayment(1);
             $this->fail('expected a transport exception');
         } catch (UnitpayTransportException $e) {
             $this->assertInstanceOf(InvalidArgumentException::class, $e);
-            $this->assertStringContainsString('Temporary server error', $e->getMessage());
+            $this->assertStringNotContainsString('Temporary server error', $e->getMessage());
         }
+    }
+
+    /** @return array<string, array{string|false|Response}> */
+    public function transportFailures(): array
+    {
+        return [
+            'connect failure' => [Response::failed(7, 'Failed to connect', false)],
+            'read timeout' => [Response::failed(28, 'Operation timed out', true)],
+            'http 404' => [Response::received(404, '')],
+            'http 500' => [Response::received(500, '<html>oops</html>')],
+            'non-json 200' => ['this is not json'],
+        ];
     }
 
     /** Account-level methods can override the project key with the account key (secretKey). */

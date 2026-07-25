@@ -267,11 +267,18 @@ class WebhookVerifier
 
     /**
      * Fetches and validates the published webhook IP feed.
+     *
+     * Deliberately throws nothing, unlike the API services which turn the same transport
+     * results into typed exceptions: a webhook handler must not start failing because a
+     * best-effort feed refresh could not reach the server. Any non-2xx, any transport
+     * error and any malformed payload yield null, and the caller keeps the current list.
+     *
      * @return string[]|null validated non-empty list, or null on any error
      */
     private function fetchUnitpayIps(): ?array
     {
-        $body = $this->transport->send($this->ipsUrl);
-        return is_string($body) ? IpAllowlist::parseWebhooksFeed($body) : null;
+        $response = $this->transport->request($this->ipsUrl);
+
+        return $response->isSuccessful() ? IpAllowlist::parseWebhooksFeed($response->getBody()) : null;
     }
 }
