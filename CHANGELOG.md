@@ -1,6 +1,6 @@
 # Changelog
 
-### v3.0.0
+### v3.0.0 — 2026-07-25
 
 **Breaking release.** The SDK is no longer a single file in the global namespace: it is now a PSR-4 package (`Unitpay\` → `src/`) split into layers — Http, Api services, Signature, Webhook, Model/Enum, Exception — behind a thin `Unitpay\Unitpay` facade. Nothing changed on the wire; only the PHP surface you call. Step-by-step renames are in [docs/migration-v3.md](docs/migration-v3.md).
 
@@ -17,7 +17,7 @@
 * Unchanged and verified as such: the signature algorithm and the `{up}` delimiter, the mandatory `PHP_INT_MAX` guard against signature forgery, constant-time comparison via `hash_equals`, the `REMOTE_ADDR`-only IP source, TLS verification on the IP-feed fetch, the fail-safe allowlist refresh, the flat request format, response shapes, PHP >= 7.4 support and the zero-dependency policy
 * Test suite ported to the new namespaces and grown from 121 to 150 tests: it now mirrors `src/`, uses a `TransportInterface` double instead of a callable, and covers the new seams (service getters and their memoization, shared transport injection)
 
-### v2.1.0
+### v2.1.0 — 2026-07-24
 
 * Telemetry: passive anonymous version fingerprint (`User-Agent` and `X-Unitpay-Client` headers in `api()`, `sdk` parameter in the `form()` URL) — SDK self-identification with no extra network requests and no PII; there is no dedicated telemetry endpoint. `User-Agent: unitpay-php-sdk/<ver> api/<v>` and a JSON `X-Unitpay-Client` header with fields `sdk_version`, `api_version` (the Unitpay API version the SDK targets), `lang`, `lang_version`, `platform` (OS family only), `publisher`. Added constants `UnitPay::VERSION` and `UnitPay::API_VERSION`
 * `CashItem`: 54-FZ dictionaries synced with the backend:
