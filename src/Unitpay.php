@@ -9,7 +9,7 @@ use Unitpay\Api\PendingParams;
 use Unitpay\Api\ReferenceService;
 use Unitpay\Api\SubscriptionService;
 use Unitpay\Exception\UnitpayValidationException;
-use Unitpay\Http\CurlTransport;
+use Unitpay\Http\DefaultTransport;
 use Unitpay\Http\TransportInterface;
 use Unitpay\Model\CashItem;
 use Unitpay\Signature\SignatureBuilder;
@@ -46,8 +46,12 @@ final class Unitpay
     /**
      * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path,
      *                       optionally with a :port.
-     * @param TransportInterface|null $transport outbound HTTP transport for api()/feed fetch.
-     *                                 Defaults to CurlTransport. Inject a fake to test without the network.
+     * @param TransportInterface|null $transport outbound HTTP transport for the service calls
+     *                                 and the IP-feed fetch. Defaults to a CurlTransport wrapped
+     *                                 in a RetryingTransport, which repeats an attempt only when
+     *                                 it provably never reached Unitpay. Pass
+     *                                 DefaultTransport::withoutRetries() to switch retries off,
+     *                                 or a fake to test without the network.
      * @param array<string, mixed>|null $request inbound webhook array read by the webhook
      *                                   verifier. Defaults to $_GET.
      * @param string|null $clientIp sender IP used by the webhook verifier. Defaults to
@@ -65,7 +69,7 @@ final class Unitpay
         $this->apiUrl = "https://$domain/api";
         $this->formUrl = "https://$domain/pay/";
         $ipsUrl = "https://$domain/ips/ips_webhooks.json";
-        $this->transport = $transport ?? new CurlTransport();
+        $this->transport = $transport ?? DefaultTransport::create();
         $this->signature = new SignatureBuilder();
         $this->pending = new PendingParams();
         $this->webhookVerifier = new WebhookVerifier(

@@ -2,6 +2,8 @@
 
 namespace Unitpay\Http;
 
+use Unitpay\Exception\UnitpayValidationException;
+
 /**
  * Default transport: cURL (with connect/read timeouts and no dependency on
  * allow_url_fopen) when ext-curl is present, otherwise a file_get_contents
@@ -16,8 +18,38 @@ namespace Unitpay\Http;
  */
 final class CurlTransport implements TransportInterface
 {
-    private int $connectTimeout = 5;
-    private int $timeout = 10;
+    private int $connectTimeout;
+    private int $timeout;
+
+    /**
+     * @param int $connectTimeout seconds allowed for establishing the connection. cURL
+     *                            only; the file_get_contents fallback has no separate
+     *                            connect timeout and is bounded by $timeout alone.
+     * @param int $timeout        seconds allowed for the whole request
+     *
+     * @throws UnitpayValidationException when either timeout is not positive
+     */
+    public function __construct(int $connectTimeout = 5, int $timeout = 10)
+    {
+        // Rejected here rather than at the first request, so a misconfiguration surfaces
+        // where it was made. cURL reads 0 as "wait forever", which in a payment flow means
+        // a request that never returns.
+        self::assertPositive($connectTimeout, 'Connect timeout');
+        self::assertPositive($timeout, 'Timeout');
+
+        $this->connectTimeout = $connectTimeout;
+        $this->timeout = $timeout;
+    }
+
+    public function getConnectTimeout(): int
+    {
+        return $this->connectTimeout;
+    }
+
+    public function getTimeout(): int
+    {
+        return $this->timeout;
+    }
 
     /**
      * @param string[] $headers
@@ -127,6 +159,18 @@ final class CurlTransport implements TransportInterface
 
         /** @var string[] $responseHeaders */
         return Response::received(self::parseStatus($responseHeaders), $body, $responseHeaders);
+    }
+
+    /**
+     * @throws UnitpayValidationException
+     */
+    private static function assertPositive(int $seconds, string $label): void
+    {
+        if ($seconds <= 0) {
+            throw new UnitpayValidationException(
+                sprintf('%s must be a positive number of seconds, got %d.', $label, $seconds)
+            );
+        }
     }
 
     /**
