@@ -9,6 +9,8 @@ use Unitpay\Api\PayoutService;
 use Unitpay\Api\ReferenceService;
 use Unitpay\Api\SubscriptionService;
 use Unitpay\Exception\UnitpayValidationException;
+use Unitpay\Http\CurlTransport;
+use Unitpay\Http\RetryingTransport;
 use Unitpay\Model\CashItem;
 use Unitpay\Unitpay;
 use Unitpay\Webhook\WebhookVerifier;
@@ -159,12 +161,36 @@ final class UnitpayFacadeTest extends TestCase
         $this->assertStringStartsWith('https://unitpay.test/api?', $transport->lastUrl());
     }
 
-    /** Without an injected transport the facade still builds — it falls back to CurlTransport. */
+    /** Without an injected transport the facade still builds — it falls back to the default stack. */
     public function testFacadeIsUsableWithoutAnInjectedTransport(): void
     {
         $unitpay = new Unitpay('unitpay.test', 'secret');
 
         $this->assertInstanceOf(PaymentService::class, $unitpay->payments());
         $this->assertStringStartsWith('https://unitpay.test/pay/pk?', $unitpay->form('pk', 100, 'acc', 'desc'));
+    }
+
+    /**
+     * Retries being on by default is a promise made in the CHANGELOG and in
+     * docs/getting-started.md, and it lives in exactly one line of wiring. Every other test
+     * injects a FakeTransport, so replacing DefaultTransport::create() with a bare
+     * `new CurlTransport()` would leave the whole suite green while the promise quietly
+     * stopped being true. This is the assertion that notices.
+     *
+     * Reflection rather than a public getter: which transport the facade composed is an
+     * implementation detail, and exposing it just to test it would put it in the API.
+     */
+    public function testFacadeDefaultsToTheRetryingStack(): void
+    {
+        $property = new \ReflectionProperty(Unitpay::class, 'transport');
+        if (\PHP_VERSION_ID < 80100) {
+            // Required before 8.1, and deprecated from 8.5 — call it only where it does something.
+            $property->setAccessible(true);
+        }
+
+        $transport = $property->getValue(new Unitpay('unitpay.test', 'secret'));
+
+        $this->assertInstanceOf(RetryingTransport::class, $transport);
+        $this->assertInstanceOf(CurlTransport::class, $transport->getInner());
     }
 }
