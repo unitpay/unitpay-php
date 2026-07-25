@@ -1,9 +1,13 @@
 <?php
 
-namespace Tests;
+namespace Tests\Model;
 
-use CashItem;
 use PHPUnit\Framework\TestCase;
+use Unitpay\Model\CashItem;
+use Unitpay\Model\Enum\Measure;
+use Unitpay\Model\Enum\Nds;
+use Unitpay\Model\Enum\PaymentMethod;
+use Unitpay\Model\Enum\PaymentObject;
 
 final class CashItemTest extends TestCase
 {
@@ -14,9 +18,9 @@ final class CashItemTest extends TestCase
         $this->assertSame('Coffee', $item->getName());
         $this->assertSame(2, $item->getCount());
         $this->assertSame(150.5, $item->getPrice());
-        $this->assertSame(CashItem::NDS_NONE, $item->getNds());
-        $this->assertSame(CashItem::PAYMENT_OBJECT_COMMODITY, $item->getType());
-        $this->assertSame(CashItem::PAYMENT_METHOD_PREPAYMENT_FULL, $item->getPaymentMethod());
+        $this->assertSame(Nds::NONE, $item->getNds());
+        $this->assertSame(PaymentObject::COMMODITY, $item->getType());
+        $this->assertSame(PaymentMethod::PREPAYMENT_FULL, $item->getPaymentMethod());
     }
 
     public function testConstructorAcceptsExplicitFiscalFields(): void
@@ -25,14 +29,14 @@ final class CashItemTest extends TestCase
             'Service',
             1,
             999.99,
-            CashItem::NDS_20,
-            CashItem::PAYMENT_OBJECT_SERVICE,
-            CashItem::PAYMENT_METHOD_PAYMENT_FULL
+            Nds::VAT20,
+            PaymentObject::SERVICE,
+            PaymentMethod::PAYMENT_FULL
         );
 
-        $this->assertSame(CashItem::NDS_20, $item->getNds());
-        $this->assertSame(CashItem::PAYMENT_OBJECT_SERVICE, $item->getType());
-        $this->assertSame(CashItem::PAYMENT_METHOD_PAYMENT_FULL, $item->getPaymentMethod());
+        $this->assertSame(Nds::VAT20, $item->getNds());
+        $this->assertSame(PaymentObject::SERVICE, $item->getType());
+        $this->assertSame(PaymentMethod::PAYMENT_FULL, $item->getPaymentMethod());
     }
 
     public function testOptionalGettersDefaultToNull(): void
@@ -55,7 +59,7 @@ final class CashItemTest extends TestCase
 
         $this->assertSame($item, $item->setSum(100.5));
         $this->assertSame($item, $item->setCurrency('USD'));
-        $this->assertSame($item, $item->setMeasure(CashItem::MEASURE_KG));
+        $this->assertSame($item, $item->setMeasure(Measure::KG));
         $this->assertSame($item, $item->setNomenclatureCode('04620034587217'));
         $this->assertSame($item, $item->setMarkCode('mark-1'));
         $this->assertSame($item, $item->setPreText('before'));
@@ -63,7 +67,7 @@ final class CashItemTest extends TestCase
 
         $this->assertSame(100.5, $item->getSum());
         $this->assertSame('USD', $item->getCurrency());
-        $this->assertSame(CashItem::MEASURE_KG, $item->getMeasure());
+        $this->assertSame(Measure::KG, $item->getMeasure());
         $this->assertSame('04620034587217', $item->getNomenclatureCode());
         $this->assertSame('mark-1', $item->getMarkCode());
         $this->assertSame('before', $item->getPreText());

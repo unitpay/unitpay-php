@@ -8,15 +8,16 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/payments/payment-info
  */
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/../UnitPay.php';
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Unitpay;
 
-$unitpay = new UnitPay($domain, $secretKey);
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/config.php';
+
+$unitpay = new Unitpay($domain, $secretKey);
 
 try {
-    $response = $unitpay->api('getPayment', [
-        'paymentId' => 3403575
-    ]);
+    $response = $unitpay->payments()->getPayment(3403575);
 
     if (isset($response->result)) {
         var_dump($response->result);

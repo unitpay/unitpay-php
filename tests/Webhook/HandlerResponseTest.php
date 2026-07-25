@@ -1,24 +1,25 @@
 <?php
 
-namespace Tests;
+namespace Tests\Webhook;
 
-use UnitPay;
 use PHPUnit\Framework\TestCase;
+use Unitpay\Unitpay;
+use Unitpay\Webhook\WebhookVerifier;
 
-final class UnitPayResponseTest extends TestCase
+final class HandlerResponseTest extends TestCase
 {
-    private UnitPay $unitPay;
+    private WebhookVerifier $webhook;
 
     protected function setUp(): void
     {
-        $this->unitPay = new UnitPay('unitpay.ru', 'secret');
+        $this->webhook = (new Unitpay('unitpay.ru', 'secret'))->webhook();
     }
 
     public function testSuccessHandlerResponseShape(): void
     {
         $this->assertSame(
             '{"result":{"message":"ok"}}',
-            $this->unitPay->getSuccessHandlerResponse('ok')
+            $this->webhook->getSuccessHandlerResponse('ok')
         );
     }
 
@@ -26,7 +27,7 @@ final class UnitPayResponseTest extends TestCase
     {
         $this->assertSame(
             '{"error":{"message":"bad"}}',
-            $this->unitPay->getErrorHandlerResponse('bad')
+            $this->webhook->getErrorHandlerResponse('bad')
         );
     }
 }

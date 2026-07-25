@@ -26,9 +26,9 @@
     "ext-curl": "Enables the default cURL transport for api(): connect/read timeouts and no dependency on allow_url_fopen. Falls back to file_get_contents when absent."
   },
   "autoload":{
-    "classmap":[
-      "./UnitPay.php"
-    ]
+    "psr-4": {
+      "Unitpay\\": "src/"
+    }
   },
   "autoload-dev": {
     "psr-4": {
@@ -37,11 +37,11 @@
   },
   "scripts": {
     "test": "phpunit",
-    "lint": "parallel-lint UnitPay.php examples tests",
+    "lint": "parallel-lint src examples tests",
     "stan": "phpstan analyse --no-progress",
     "cs-check": "php-cs-fixer fix --dry-run --diff",
     "cs-fix": "php-cs-fixer fix",
-    "md": "@php -d error_reporting=\"E_ALL & ~E_DEPRECATED\" vendor/bin/phpmd UnitPay.php text phpmd.xml",
+    "md": "@php -d error_reporting=\"E_ALL & ~E_DEPRECATED\" vendor/bin/phpmd src text phpmd.xml",
     "check": [
       "@lint",
       "@cs-check",
@@ -56,7 +56,7 @@
     "stan": "Run PHPStan static analysis",
     "cs-check": "Report code-style violations without changing files",
     "cs-fix": "Apply code-style fixes in place",
-    "md": "Run PHPMD mess detection on UnitPay.php",
+    "md": "Run PHPMD mess detection on src/",
     "check": "Run lint, cs-check, stan, md and test in sequence"
   }
 }

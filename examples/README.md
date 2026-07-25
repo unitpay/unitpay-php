@@ -4,9 +4,14 @@ Ready-made Unitpay integration scenarios. The examples read `$_GET`/`$_SERVER` a
 `header()`, so they must be served over HTTP, not run from the CLI:
 
 ```sh
+composer install                 # the examples autoload the SDK from vendor/
 php -S localhost:8000 -t examples
 # then open e.g. http://localhost:8000/paymentInfo.php
 ```
+
+Since 3.0 every example loads `vendor/autoload.php` and uses the `Unitpay\` namespace:
+`new Unitpay\Unitpay(...)` as the entry point, then the service objects — `payments()`,
+`subscriptions()`, `payouts()`, `reference()` — and `webhook()` for inbound verification.
 
 ## Configuration
 
@@ -31,7 +36,7 @@ export UNITPAY_ACCOUNT_SECRET_KEY=...    # account key
 | --- | --- |
 | [paymentForm.php](paymentForm.php) | Unitpay-hosted payment form: `form()` builds the URL to the payment page; fluent setters (`setBackUrl`/`setCustomerEmail`/`setCustomerPhone`). |
 | [initPaymentApi.php](initPaymentApi.php) | Server-to-server `initPayment`: handling the `redirect` / `invoice` / `response` reply. |
-| [receipt.php](receipt.php) | 54-FZ fiscal receipt: line items via `CashItem` + `setCashItems()`. |
+| [receipt.php](receipt.php) | 54-FZ fiscal receipt: line items via `CashItem` + `setCashItems()`, dictionaries from `Model\Enum`. |
 | [webhook.php](webhook.php) | Webhook handler: signature and IP verification, `check`/`pay`/`preauth`/`error` responses. |
 | [paymentInfo.php](paymentInfo.php) | Payment info (`getPayment`). |
 | [refund.php](refund.php) | Payment refund, full or partial (`refundPayment`). |

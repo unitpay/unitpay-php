@@ -8,16 +8,17 @@ header('Content-Type: text/html; charset=UTF-8');
  * @link https://help.unitpay.ru/api/payment-refund
  */
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/../UnitPay.php';
+use Unitpay\Exception\UnitpayExceptionInterface;
+use Unitpay\Unitpay;
 
-$unitpay = new UnitPay($domain, $secretKey);
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/config.php';
+
+$unitpay = new Unitpay($domain, $secretKey);
 
 try {
-    $response = $unitpay->api('refundPayment', [
-        'paymentId' => 3403575,
-        // 'sum' => 100, // optional: partial refund; omit for a full refund
-    ]);
+    // Omit the options for a full refund; pass ['sum' => 100] to refund part of it.
+    $response = $unitpay->payments()->refundPayment(3403575);
 
     if (isset($response->result->message)) {
         print $response->result->message;
