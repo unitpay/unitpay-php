@@ -4,6 +4,7 @@ namespace Tests\Api;
 
 use PHPUnit\Framework\TestCase;
 use Tests\Support\FakeTransport;
+use Unitpay\Model\CashItem;
 use Unitpay\Unitpay;
 
 final class PaymentServiceTest extends TestCase
@@ -104,5 +105,34 @@ final class PaymentServiceTest extends TestCase
         $this->assertSame('offsetAdvance', $query['method']);
         $this->assertSame('partner@example.com', $query['login']);
         $this->assertSame('555', $query['paymentId']);
+    }
+
+    /**
+     * offsetAdvance is a consuming call: the advance-offset receipt is optional, but when
+     * it is set via setCashItems() it must reach the request and be cleared afterwards.
+     */
+    public function testOffsetAdvanceCarriesTheAccumulatedReceipt(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = $this->unitpay($transport);
+        $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
+
+        $unitpay->payments()->offsetAdvance('partner@example.com', 555);
+        $unitpay->payments()->offsetAdvance('partner@example.com', 556);
+
+        $this->assertStringContainsString('cashItems=', $transport->url(0));
+        $this->assertStringNotContainsString('cashItems=', $transport->url(1));
+    }
+
+    /** getPayment does not accept a receipt, so it must never carry one. */
+    public function testGetPaymentNeverCarriesTheAccumulatedReceipt(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = $this->unitpay($transport);
+        $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
+
+        $unitpay->payments()->getPayment(555);
+
+        $this->assertStringNotContainsString('cashItems=', $transport->url(0));
     }
 }

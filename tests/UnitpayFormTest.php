@@ -3,6 +3,7 @@
 namespace Tests;
 
 use PHPUnit\Framework\TestCase;
+use Tests\Support\FakeTransport;
 use Unitpay\Exception\UnitpayValidationException;
 use Unitpay\Model\CashItem;
 use Unitpay\Signature\SignatureBuilder;
@@ -114,6 +115,25 @@ final class UnitpayFormTest extends TestCase
         $this->assertArrayHasKey('backUrl', $first);
         $this->assertArrayNotHasKey('backUrl', $second);
         $this->assertArrayNotHasKey('customerEmail', $second);
+    }
+
+    /**
+     * A service call issued between the setters and form() must not swallow them: the
+     * receipt and customer belong to the form, not to the lookup that ran first.
+     */
+    public function testFormKeepsSettersAcrossAnInterveningServiceCall(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.ru', self::SECRET, $transport);
+        $unitpay->setCustomerEmail('customer@example.com')
+            ->setCashItems([new CashItem('X', 1, 100.0)]);
+
+        $unitpay->payments()->getPayment(555);
+        $query = $this->queryOf($unitpay->form('pk', 100, 'acc', 'desc'));
+
+        $this->assertStringNotContainsString('cashItems=', $transport->url(0));
+        $this->assertSame('customer@example.com', $query['customerEmail']);
+        $this->assertArrayHasKey('cashItems', $query);
     }
 
     /** The form signature must cover ONLY the four vital params, not the setter params. */

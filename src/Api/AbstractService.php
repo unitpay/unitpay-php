@@ -38,11 +38,27 @@ abstract class AbstractService
     }
 
     /**
-     * Runs a server-to-server call. Accumulated fluent params (cashItems, backUrl, ...)
-     * are drained and merged, with the explicit call params taking precedence. An
-     * explicit non-empty secretKey overrides the instance key so account-level methods
-     * (getPartner, payouts, ...) can use the account key. The params are cleared as part
-     * of drain(), symmetric with form().
+     * Merges the accumulated fluent params (cashItems, backUrl, customerEmail,
+     * customerPhone) into a call's own params and clears them; explicit call params take
+     * precedence. Only initPayment() and offsetAdvance() accept them.
+     *
+     * Clearing happens before the request, so a failed call consumes them too and a retry
+     * must re-apply the setters — symmetric with form().
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    protected function withPending(array $params): array
+    {
+        return array_merge($this->pending->drain(), $params);
+    }
+
+    /**
+     * Runs a server-to-server call. An explicit non-empty secretKey overrides the instance
+     * key so account-level methods (getPartner, payouts, ...) can use the account key.
+     *
+     * This does NOT touch the accumulated fluent params: a consuming method opts in
+     * explicitly by wrapping its params in withPending().
      *
      * @param array<string, mixed> $params
      * @throws UnitpayValidationException when the secret key is unset/empty
@@ -50,8 +66,6 @@ abstract class AbstractService
      */
     protected function request(string $method, array $params): object
     {
-        $params = array_merge($this->pending->drain(), $params);
-
         if (empty($params['secretKey'])) {
             $params['secretKey'] = $this->secretKey;
         }

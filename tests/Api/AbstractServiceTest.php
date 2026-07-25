@@ -105,13 +105,57 @@ final class AbstractServiceTest extends TestCase
     }
 
     /**
-     * Fluent-setter params are cleared once the request has been attempted — on a transport
-     * failure too, not only on success — so a stale receipt cannot leak into an unrelated
-     * later call on a reused instance. A retry must re-apply the setters (symmetric with form()).
+     * A CONSUMING call clears the fluent-setter params once the request has been attempted —
+     * on a transport failure too, not only on success — so a stale receipt cannot leak into
+     * an unrelated later order on a reused instance. A retry must re-apply the setters
+     * (symmetric with form()).
      */
-    public function testFluentSetterParamsAreClearedAfterFailedCall(): void
+    public function testFluentSetterParamsAreClearedAfterFailedConsumingCall(): void
     {
         // The first call simulates a transport failure (false), later ones succeed.
+        $transport = new FakeTransport(false, '{"result":{}}');
+        $unitpay = new Unitpay('unitpay.test', 'my-secret', $transport);
+        $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
+
+        try {
+            $unitpay->payments()->initPayment('order-1', 100, 7, 'card');
+            $this->fail('expected a transport exception on the first call');
+        } catch (UnitpayTransportException $e) {
+            // expected: the transport returned false
+        }
+
+        $unitpay->payments()->initPayment('order-2', 100, 7, 'card');
+
+        $this->assertStringContainsString('cashItems=', $transport->url(0));
+        $this->assertStringNotContainsString('cashItems=', $transport->url(1));
+    }
+
+    /**
+     * A lookup issued between setCashItems() and initPayment() must not swallow the
+     * receipt: only the calls that accept the fluent-setter params may drain them.
+     */
+    public function testNonConsumingCallNeitherReceivesNorConsumesPendingParams(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'my-secret', $transport);
+        $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)])
+            ->setCustomerEmail('buyer@example.com');
+
+        $unitpay->reference()->getPartner('partner@example.com');
+        $unitpay->payments()->initPayment('order-1', 100, 7, 'card');
+
+        $this->assertStringNotContainsString('cashItems=', $transport->url(0));
+        $this->assertStringNotContainsString('customerEmail=', $transport->url(0));
+        $this->assertStringContainsString('cashItems=', $transport->url(1));
+        $this->assertStringContainsString('customerEmail=', $transport->url(1));
+    }
+
+    /**
+     * A failing non-consuming call must not eat the pending params either — the params
+     * belong to the payment that has not been sent yet.
+     */
+    public function testFailedNonConsumingCallLeavesPendingParamsIntact(): void
+    {
         $transport = new FakeTransport(false, '{"result":{}}');
         $unitpay = new Unitpay('unitpay.test', 'my-secret', $transport);
         $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
@@ -123,11 +167,10 @@ final class AbstractServiceTest extends TestCase
             // expected: the transport returned false
         }
 
-        $unitpay->payments()->getPayment(2);
+        $unitpay->payments()->initPayment('order-1', 100, 7, 'card');
 
-        // The receipt was consumed by the failed call and did NOT leak into the next one.
-        $this->assertStringContainsString('cashItems=', $transport->url(0));
-        $this->assertStringNotContainsString('cashItems=', $transport->url(1));
+        $this->assertStringNotContainsString('cashItems=', $transport->url(0));
+        $this->assertStringContainsString('cashItems=', $transport->url(1));
     }
 
     public function testNonObjectResponseIsReportedAsTemporaryServerError(): void

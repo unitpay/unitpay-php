@@ -72,18 +72,21 @@ final class UnitpayFacadeTest extends TestCase
     }
 
     /**
-     * The fluent setters live on the facade but their params belong to whichever service
-     * is called next — the pending-params holder is shared, not per-service.
+     * The pending-params holder is shared across services rather than per-service, so a
+     * receipt set on the facade reaches PaymentService — but only the calls that accept it:
+     * a payout lookup in between neither receives nor consumes it.
      */
-    public function testAccumulatedParamsReachAnyService(): void
+    public function testAccumulatedParamsReachTheConsumingServiceOnly(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
 
         $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
         $unitpay->payouts()->massPaymentCommissions('partner@example.com');
+        $unitpay->payments()->initPayment('order-1', 100, 7, 'card');
 
-        $this->assertArrayHasKey('cashItems', $transport->query());
+        $this->assertArrayNotHasKey('cashItems', $transport->query(0));
+        $this->assertArrayHasKey('cashItems', $transport->query(1));
     }
 
     /** The domain given to the constructor drives every endpoint the facade builds. */
