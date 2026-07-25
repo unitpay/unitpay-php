@@ -1,8 +1,12 @@
 # Changelog
 
-### v3.1.0 — 2026-07-25
+### v4.0.0 — 2026-07-25
 
-**Behavior changes.** Three settings that used to fail silently now either bind correctly or say what is wrong. Nothing changed on the wire.
+**Breaking release.** The transport contract changed: `Unitpay\Http\TransportInterface` now returns a `Response` object instead of `string|false`, and inbound webhooks older than the tolerance window are rejected. If you implement your own transport, see [docs/migration-v4.md](docs/migration-v4.md); if you only use the SDK's own transport, the upgrade is a version bump.
+
+> **3.1.0 was never published.** The BC-safe tech-debt batch prepared under that number ships here instead, so this entry covers both it and the 4.0 work. Nothing was dropped.
+
+**Behavior changes carried over from the unreleased 3.1.0.** Three settings that used to fail silently now either bind correctly or say what is wrong. Nothing changed on the wire.
 
 * **Fluent setter params bind to the calls that accept them, not to whichever call runs first.** `AbstractService::request()` used to drain the accumulated params on every method, so `setCashItems()` followed by any lookup sent the 54-FZ receipt with that lookup — where it is meaningless — and the payment created right after it carried no receipt at all. Nothing reported the loss. The params are now read and cleared only by `form()`, `payments()->initPayment()` and `payments()->offsetAdvance()`; every other service call leaves them untouched, so a receipt survives an intervening lookup and still reaches its payment. A consuming call still clears them even when the request fails, so a retry must re-apply the setters. If your code relied on a receipt reaching a non-payment method, it was already being discarded before the payment — the fix makes it arrive instead
 * **`setAllowedIps()` and `addAllowedIps()` reject malformed entries** with `UnitpayValidationException` instead of accepting them. A typo such as `31.186.100.4 9` or a `/33` prefix produced an allowlist that matched nothing, so every webhook was refused with a bare `IP address Error` and no hint at the cause. The whole call is rejected rather than the offending entry alone, so the allowlist is never left half-configured. `refreshAllowedIps()` is unchanged and still fail-safe: it drops bad feed entries and never throws
