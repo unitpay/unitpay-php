@@ -30,7 +30,9 @@ final class WebhookVerifierTest extends TestCase
             'account'       => '42',
             'orderSum'      => '100.00',
             'orderCurrency' => 'RUB',
-            'date'          => '2026-07-20 12:00:00',
+            // Fresh by default: the replay window is on out of the box, so a fixed date
+            // would make every webhook test start failing the moment it went stale.
+            'date'          => self::dateAt(time()),
             'payerSum'      => '100.00',
             'unitpayId'     => '999',
         ], $overrides);
@@ -38,6 +40,16 @@ final class WebhookVerifierTest extends TestCase
         $params['signature'] = $this->sign($params, $method);
 
         return ['method' => $method, 'params' => $params];
+    }
+
+    /**
+     * Formats a unix timestamp the way Unitpay sends it: `Y-m-d H:i:s` wall clock in
+     * UTC+3. gmdate() rather than date() so the fixture does not shift with the ambient
+     * date.timezone — which is exactly what the timezone regression test below checks.
+     */
+    public static function dateAt(int $timestamp): string
+    {
+        return gmdate('Y-m-d H:i:s', $timestamp + 3 * 3600);
     }
 
     /**
