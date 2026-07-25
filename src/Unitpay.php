@@ -13,6 +13,7 @@ use Unitpay\Http\DefaultTransport;
 use Unitpay\Http\TransportInterface;
 use Unitpay\Model\CashItem;
 use Unitpay\Signature\SignatureBuilder;
+use Unitpay\Telemetry\ClientInfo;
 use Unitpay\Webhook\WebhookVerifier;
 
 /**
@@ -37,6 +38,7 @@ final class Unitpay
     private TransportInterface $transport;
     private SignatureBuilder $signature;
     private PendingParams $pending;
+    private ClientInfo $clientInfo;
     private WebhookVerifier $webhookVerifier;
     private ?PaymentService $payments = null;
     private ?SubscriptionService $subscriptions = null;
@@ -72,6 +74,7 @@ final class Unitpay
         $this->transport = $transport ?? DefaultTransport::create();
         $this->signature = new SignatureBuilder();
         $this->pending = new PendingParams();
+        $this->clientInfo = new ClientInfo(self::VERSION, self::API_VERSION);
         $this->webhookVerifier = new WebhookVerifier(
             $secretKey,
             $this->signature,
@@ -110,6 +113,55 @@ final class Unitpay
     public function webhook(): WebhookVerifier
     {
         return $this->webhookVerifier;
+    }
+
+    /**
+     * Names the CMS this integration runs on, e.g. setCms('Bitrix', '22.0').
+     *
+     * The value rides along in User-Agent and X-Unitpay-Client on every service call. It
+     * is a product name and version only — no PII, no identifiers. Most Unitpay
+     * integrations are CMS modules, and without this the fingerprint cannot tell one
+     * apart from a bare script.
+     *
+     * @throws UnitpayValidationException on an empty name or version
+     */
+    public function setCms(string $name, string $version): self
+    {
+        $this->clientInfo->setSlot(ClientInfo::SLOT_CMS, $name, $version);
+        return $this;
+    }
+
+    /**
+     * Names the framework this integration runs on, e.g. setFramework('Laravel', '11.0').
+     *
+     * @throws UnitpayValidationException on an empty name or version
+     */
+    public function setFramework(string $name, string $version): self
+    {
+        $this->clientInfo->setSlot(ClientInfo::SLOT_FRAMEWORK, $name, $version);
+        return $this;
+    }
+
+    /**
+     * Names the module or plugin wrapping this SDK, e.g.
+     * setModule('unitpay-bitrix', '3.1').
+     *
+     * @throws UnitpayValidationException on an empty name or version
+     */
+    public function setModule(string $name, string $version): self
+    {
+        $this->clientInfo->setSlot(ClientInfo::SLOT_MODULE, $name, $version);
+        return $this;
+    }
+
+    /**
+     * Stops sending the X-Unitpay-Client header. The User-Agent keeps naming the SDK and
+     * its version, which is what makes a request supportable at all.
+     */
+    public function disableTelemetry(): self
+    {
+        $this->clientInfo->disable();
+        return $this;
     }
 
     /**
@@ -221,8 +273,7 @@ final class Unitpay
             $this->apiUrl,
             $this->secretKey,
             $this->pending,
-            self::VERSION,
-            self::API_VERSION
+            $this->clientInfo
         );
     }
 

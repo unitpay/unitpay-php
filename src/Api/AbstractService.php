@@ -10,6 +10,7 @@ use Unitpay\Exception\UnitpayValidationException;
 use Unitpay\Http\Response;
 use Unitpay\Http\TransportInterface;
 use Unitpay\Signature\SignatureBuilder;
+use Unitpay\Telemetry\ClientInfo;
 
 /**
  * Shared request pipeline for the API services: merges accumulated fluent params,
@@ -22,23 +23,20 @@ abstract class AbstractService
     private string $apiUrl;
     private ?string $secretKey;
     private PendingParams $pending;
-    private string $sdkVersion;
-    private string $apiVersion;
+    private ClientInfo $clientInfo;
 
     public function __construct(
         TransportInterface $transport,
         string $apiUrl,
         ?string $secretKey,
         PendingParams $pending,
-        string $sdkVersion,
-        string $apiVersion
+        ClientInfo $clientInfo
     ) {
         $this->transport = $transport;
         $this->apiUrl = $apiUrl;
         $this->secretKey = $secretKey;
         $this->pending = $pending;
-        $this->sdkVersion = $sdkVersion;
-        $this->apiVersion = $apiVersion;
+        $this->clientInfo = $clientInfo;
     }
 
     /**
@@ -86,7 +84,7 @@ abstract class AbstractService
             PHP_QUERY_RFC3986
         );
 
-        return $this->decode($this->transport->request($requestUrl, $this->fingerprintHeaders()));
+        return $this->decode($this->transport->request($requestUrl, $this->clientInfo->headers()));
     }
 
     /**
@@ -151,25 +149,4 @@ abstract class AbstractService
             . '. The request was not sent, so nothing was processed.';
     }
 
-    /**
-     * SDK self-identification headers (anonymous, no PII): a short User-Agent plus an
-     * X-Unitpay-Client JSON object. api_version is the Unitpay API surface targeted;
-     * platform is the coarse OS family only.
-     * @return string[]
-     */
-    private function fingerprintHeaders(): array
-    {
-        $client = (string) json_encode([
-            'sdk_version'  => $this->sdkVersion,
-            'api_version'  => $this->apiVersion,
-            'lang'         => 'php',
-            'lang_version' => PHP_VERSION,
-            'platform'     => PHP_OS_FAMILY,
-            'publisher'    => 'unitpay',
-        ]);
-        return [
-            'User-Agent: unitpay-php-sdk/' . $this->sdkVersion . ' api/' . $this->apiVersion,
-            'X-Unitpay-Client: ' . $client,
-        ];
-    }
 }
