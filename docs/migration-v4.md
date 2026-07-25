@@ -115,6 +115,13 @@ One message is gone deliberately: **"Temporary server error. Please try again la
 was also used for a disabled `allow_url_fopen`, which is permanent. If you match on that
 string, match on the exception class instead.
 
+Note what the examples above log: `getMessage()` and the typed accessors, never
+`$e->getTrace()`. The secret key is a query parameter of this API, so it sits in the
+arguments of the stack frames — harmless under PHP's default `zend.exception_ignore_args=1`,
+and dumped verbatim by `getTrace()` when that is switched off. This is not new in 4.0, but
+4.0 is the release that gives you something better to log; see
+[Logging these exceptions without logging your key](api-methods.md#logging-these-exceptions-without-logging-your-key).
+
 ## 3. Webhooks: the replay window
 
 `checkHandlerRequest()` now also checks that `params[date]` is within **300 seconds** of

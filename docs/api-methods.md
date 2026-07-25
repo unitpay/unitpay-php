@@ -19,10 +19,43 @@ class tells you what to do next:
 | `UnitpayResponseException` | a 2xx arrived whose body is not a JSON object | `getStatusCode()`, `getResponseBody()` | no — the call was delivered and accepted |
 
 `getResponseBody()` keeps whatever came back, including the HTML error page a gateway
-returns on a 502. That is what Unitpay support will ask you to quote.
+returns on a 502. That is what Unitpay support will ask you to quote — put it in your log,
+not on the page, since an upstream error body can name internal hosts.
 
 A missing or empty secret key still throws `UnitpayValidationException` before any request
 is made.
+
+## Logging these exceptions without logging your key
+
+The Unitpay API takes `secretKey` as a query parameter, so the key travels through the SDK
+as an ordinary argument. It never reaches `getMessage()`, and it is never written to the
+error log — but it does sit in the *arguments* of the stack frames, and PHP can be
+configured to keep those:
+
+| | `zend.exception_ignore_args=1` (PHP's default since 7.4) | `zend.exception_ignore_args=0` |
+| --- | --- | --- |
+| `getMessage()`, the typed accessors | safe | safe |
+| `getTraceAsString()`, `(string) $e` | safe | leaks the first 15 characters when the key was a direct string argument — `new Unitpay(...)`, `SignatureBuilder::build()` |
+| `getTrace()` | safe | **leaks the whole key**, which travels inside the `$params` array |
+
+So:
+
+```php
+// ✅ Safe on any configuration.
+myLogger()->error($e->getMessage(), ['status' => $e->getStatusCode()]);
+
+// ❌ Dumps the secret key verbatim when zend.exception_ignore_args=0.
+myLogger()->error('Unitpay failed', ['trace' => $e->getTrace()]);
+```
+
+Check the setting before you trust a handler you did not write: error trackers such as
+Sentry and Bugsnag, and Monolog's `IntrospectionProcessor`, serialize frame arguments when
+PHP gives them any. Either leave `zend.exception_ignore_args` at its default of `1`, or add
+`secretKey` to the tracker's scrubbing list.
+
+This is a property of the API contract rather than of the SDK: the key is a request
+parameter, so anything that records the request records it. The same applies to your
+access logs if you ever proxy these calls.
 
 ## `payments()`
 
