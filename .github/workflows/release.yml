@@ -1,0 +1,108 @@
+name: Release
+
+# Tag push -> GitHub release with the CHANGELOG section + a Packagist re-crawl.
+# The Packagist GitHub hook already publishes new tags on its own; this ping is
+# the fallback for when it lags or breaks (e.g. after a repository rename).
+# Run via workflow_dispatch to ping Packagist without cutting a release.
+
+on:
+  push:
+    tags:
+      # Historic tags use both spellings: v1.1.2 and 3.0.0.
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: GitHub release & Packagist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the release step compares this tag against every other
+          # one to decide whether it is really the newest version.
+          fetch-depth: 0
+
+      - name: Extract the CHANGELOG section for this tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          # CHANGELOG headings are always "### v3.0.0 — 2026-07-25"; tags are not
+          # always prefixed, so normalise 3.0.0 and v3.0.0 to the same lookup.
+          heading="### v${GITHUB_REF_NAME#v} "
+          awk -v h="$heading" 'index($0, h) == 1 { found = 1; next } found && /^### / { exit } found' \
+            CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::warning::No CHANGELOG section matching '${heading}' — falling back to generated notes"
+          fi
+
+      - name: Create the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, leaving it untouched"
+            exit 0
+          fi
+          # GitHub picks "Latest" by tag date, so a 2.x backport cut after 3.0.0
+          # would steal the badge. Strip the optional v prefix before comparing,
+          # otherwise git sorts v1.1.2 above 3.0.0.
+          highest=$(git tag | sed 's/^v//' | sort -V | tail -1)
+          if [ "${GITHUB_REF_NAME#v}" = "$highest" ]; then latest=true; else latest=false; fi
+          echo "Highest tag in the repository: $highest (this release --latest=$latest)"
+          if [ -s release-notes.md ]; then
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --latest="$latest" --notes-file release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --latest="$latest" --generate-notes
+          fi
+
+      - name: Ask Packagist to re-crawl the repository
+        env:
+          PACKAGIST_USERNAME: ${{ vars.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PACKAGIST_USERNAME:-}" ] || [ -z "${PACKAGIST_TOKEN:-}" ]; then
+            echo "PACKAGIST_USERNAME (variable) or PACKAGIST_TOKEN (secret) is missing" >&2
+            exit 1
+          fi
+          # The safe token is enough here: update-package is the one write endpoint
+          # it may call. Bearer auth keeps the token out of the request URL.
+          response=$(curl -sS --fail-with-body \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${PACKAGIST_USERNAME}:${PACKAGIST_TOKEN}" \
+            -A "unitpay-php-release (+https://github.com/${GITHUB_REPOSITORY})" \
+            -d "{\"repository\":\"https://github.com/${GITHUB_REPOSITORY}\"}" \
+            https://packagist.org/api/update-package)
+          echo "$response"
+          echo "$response" | jq -e '.status == "success"' >/dev/null
+
+      - name: Wait for the version to appear on Packagist
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          package=$(jq -r .name composer.json)
+          version="${GITHUB_REF_NAME#v}"
+          # Packagist queues the crawl, so this is a poll, not an immediate check.
+          for _ in $(seq 1 12); do
+            if curl -sS "https://repo.packagist.org/p2/${package}.json" \
+              | jq -e --arg p "$package" --arg v "$version" \
+                  '[.packages[$p][].version] | any(. == $v or . == "v" + $v)' >/dev/null; then
+              echo "$package $version is live on Packagist"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::$package $version is not on Packagist yet — check https://packagist.org/packages/$package"
