@@ -63,8 +63,9 @@ final class AbstractServiceTest extends TestCase
         $this->assertStringContainsString('cashItems=', $url);
         $this->assertStringContainsString('customerEmail=', $url);
 
-        $query = $transport->query();
-        $items = json_decode(base64_decode((string) $query['cashItems']), true);
+        // parse_str() types query values as array|string; cashItems is always scalar here.
+        $encoded = $transport->query()['cashItems'] ?? '';
+        $items = json_decode(base64_decode(is_string($encoded) ? $encoded : ''), true);
         $this->assertSame('Coffee', $items[0]['name']);
     }
 

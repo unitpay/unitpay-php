@@ -14,7 +14,9 @@ final class UnitpayFormTest extends TestCase
     private const SECRET = 'secret';
 
     /**
-     * @return array<string, mixed>
+     * parse_str() yields string values plus arrays for bracketed keys, hence the union.
+     *
+     * @return array<int|string, array<mixed>|string>
      */
     private function queryOf(string $url): array
     {

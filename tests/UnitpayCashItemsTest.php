@@ -23,8 +23,10 @@ final class UnitpayCashItemsTest extends TestCase
     {
         $url = $unitpay->form('pk', 1, 'acc', 'desc');
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        // parse_str() types query values as array|string; cashItems is always scalar here.
+        $encoded = $query['cashItems'] ?? '';
 
-        return json_decode(base64_decode((string) $query['cashItems']), true);
+        return json_decode(base64_decode(is_string($encoded) ? $encoded : ''), true);
     }
 
     public function testRequiredFieldsAreAlwaysSerialized(): void

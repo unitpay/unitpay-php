@@ -34,7 +34,8 @@ final class CurlTransport implements TransportInterface
             if (\PHP_VERSION_ID < 80000) {
                 curl_close($ch);
             }
-            return $body;
+            // curl_exec() returns true only when RETURNTRANSFER is off; it is always on here.
+            return is_string($body) ? $body : false;
         }
 
         $http = ['timeout' => 10];

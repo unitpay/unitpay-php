@@ -20,7 +20,10 @@ final class PaymentServiceTest extends TestCase
 
         $response = $unitpay->payments()->initPayment('1', 100, 7, 'card');
 
-        $this->assertSame(42, $response->result->receiptId);
+        $this->assertSame(
+            ['result' => ['receiptId' => 42]],
+            json_decode((string) json_encode($response), true)
+        );
     }
 
     public function testInitPaymentSendsItsRequiredParams(): void

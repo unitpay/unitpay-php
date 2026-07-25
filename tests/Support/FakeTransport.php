@@ -59,8 +59,10 @@ final class FakeTransport implements TransportInterface
     }
 
     /**
-     * Query string of the n-th call, parsed into an array.
-     * @return array<string, mixed>
+     * Query string of the n-th call, parsed into an array. parse_str() yields string
+     * values plus arrays for bracketed keys, hence the union.
+     *
+     * @return array<int|string, array<mixed>|string>
      */
     public function query(int $index = 0): array
     {

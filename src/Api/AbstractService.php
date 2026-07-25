@@ -82,7 +82,8 @@ abstract class AbstractService
             PHP_QUERY_RFC3986
         );
 
-        $response = json_decode($this->transport->send($requestUrl, $this->fingerprintHeaders()));
+        $body = $this->transport->send($requestUrl, $this->fingerprintHeaders());
+        $response = is_string($body) ? json_decode($body) : null;
         if (!is_object($response)) {
             throw new UnitpayTransportException('Temporary server error. Please try again later.');
         }

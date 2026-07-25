@@ -2,6 +2,7 @@
 
 namespace Unitpay;
 
+use Unitpay\Api\AbstractService;
 use Unitpay\Api\PaymentService;
 use Unitpay\Api\PayoutService;
 use Unitpay\Api\PendingParams;
@@ -205,10 +206,11 @@ final class Unitpay
     }
 
     /**
-     * @param class-string<PaymentService|SubscriptionService|PayoutService|ReferenceService> $class
-     * @return PaymentService|SubscriptionService|PayoutService|ReferenceService
+     * @template T of AbstractService
+     * @param class-string<T> $class
+     * @return T
      */
-    private function makeService(string $class)
+    private function makeService(string $class): AbstractService
     {
         return new $class(
             $this->transport,
