@@ -8,7 +8,7 @@ self-identification, like any `User-Agent` — it makes **no extra network calls
 sends secrets, amounts, or customer data:
 
 * Service calls (`payments()`, `subscriptions()`, `payouts()`, `reference()`) carry a
-  `User-Agent: unitpay-php-sdk/<ver> api/<v>` header and an `X-Unitpay-Client` JSON header
+  `User-Agent: unitpay-php-sdk/<ver> api/<v>` header and a `Unitpay-Client` JSON header
   with `sdk_version`, `api_version` (the Unitpay API surface targeted), `lang`,
   `lang_version`, `platform` (coarse OS family only), `publisher`.
 * `form()` URLs carry an `sdk=php_<ver>_<major.minor>` query parameter (outside the
@@ -33,13 +33,29 @@ Each filled slot appears in both headers:
 
 ```text
 User-Agent: unitpay-php-sdk/4.0.0 api/v1 Laravel/11.0 Bitrix/22.0 unitpay-bitrix/3.1
-X-Unitpay-Client: {"sdk_version":"4.0.0", ..., "framework":"Laravel/11.0","cms":"Bitrix/22.0","module":"unitpay-bitrix/3.1"}
+Unitpay-Client: {"sdk_version":"4.0.0", ..., "framework":{"name":"Laravel","version":"11.0"},"cms":{"name":"Bitrix","version":"22.0"},"module":{"name":"unitpay-bitrix","version":"3.1"}}
 ```
 
+In `Unitpay-Client` a slot is an object, so a consumer never has to guess where the name
+ends and the version begins — a product name may legitimately contain a slash, and the most
+natural module name to pass is the Composer package name (`unitpay/woocommerce`). The
+`User-Agent` keeps the joined `Name/Version` form because that field cannot carry structure;
+treat the JSON header as the machine-readable one.
+
 Set them once, right after construction — they apply to every later service call, including
-through service objects that were already created. An unset slot is omitted rather than sent
-empty, and a slot given a name without a version (or the reverse) throws
-`UnitpayValidationException` instead of emitting a meaningless `Bitrix/` token.
+through service objects that were already created.
+
+**A slot is never allowed to break a request.** These setters usually run in an
+integration's bootstrap, so nothing here raises on the values you pass:
+
+* An unset slot is omitted rather than sent empty.
+* A blank name or version is ignored — the slot is simply not sent. A CMS that stops
+  exposing its version string costs you a field in a header, not a checkout.
+* Control characters are stripped, and each half is capped (64 bytes for a name, 32 for a
+  version) so a stray value cannot bloat the header.
+* A non-ASCII name (`1С-Битрикс`) rides in the JSON header only. A `User-Agent` is an ASCII
+  field, and an absent token there is better than a mangled one; the JSON header carries the
+  name losslessly.
 
 **These are product names and versions you supply.** Nothing is collected from the
 environment beyond what is already listed above, and nothing identifies a merchant, a
@@ -51,7 +67,7 @@ payment or a customer.
 $unitpay->disableTelemetry();
 ```
 
-`X-Unitpay-Client` is then not sent at all. The `User-Agent` keeps `unitpay-php-sdk/<ver>`
+`Unitpay-Client` is then not sent at all. The `User-Agent` keeps `unitpay-php-sdk/<ver>`
 — a request that identifies no library at all is materially harder for Unitpay support to
 help with, so that much stays.
 

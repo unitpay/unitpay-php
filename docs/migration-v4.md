@@ -2,12 +2,13 @@
 
 [← Getting Started](getting-started.md) · [Back to README](../README.md) · [Migrating to v3 →](migration-v3.md)
 
-Two things break in 4.0, and only one of them affects most integrations.
+Three things break in 4.0, and only one of them affects most integrations.
 
 | Change | Affects you if… | Effort |
 | --- | --- | --- |
 | `TransportInterface` returns a `Response` | you wrote your own transport | ~10 lines |
 | Stale webhooks are rejected | your handler runs more than 5 minutes behind, or your clock drifts | one call, or nothing |
+| `X-Unitpay-Client` renamed to `Unitpay-Client` | something on your side reads the SDK's own outgoing headers | one rename |
 
 Everything else is additive: configurable timeouts, retries for requests that never left
 the client, and telemetry slots. If you use the SDK's own transport and your server clock
@@ -151,7 +152,28 @@ A webhook that carries no `date` at all is accepted. It is inside the signed pay
 an attacker cannot strip it to skip the check — removing any parameter breaks the
 signature, which is verified first.
 
-## 4. What you get without doing anything
+## 4. The client header was renamed
+
+`X-Unitpay-Client` is now `Unitpay-Client`, and each telemetry slot inside it is an object
+rather than a joined string:
+
+```diff
+-X-Unitpay-Client: {"sdk_version":"4.0.0", ..., "cms":"Bitrix/22.0"}
++Unitpay-Client: {"sdk_version":"4.0.0", ..., "cms":{"name":"Bitrix","version":"22.0"}}
+```
+
+The `X-` prefix was retired by [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) in 2012,
+and the joined value forced a consumer to split on `/` — a separator a product name may
+itself contain, `unitpay/woocommerce` being the obvious case.
+
+This affects you only if something on your side reads the SDK's own outgoing headers: a
+custom transport that logs them, or a test that asserts on them. The SDK sends one name,
+not both — but note that 2.x and 3.x installs keep sending `X-Unitpay-Client`, so anything
+parsing this header has to accept both names for as long as those versions are in the field.
+
+See [Telemetry](telemetry.md) for the full payload and the slot rules.
+
+## 5. What you get without doing anything
 
 * **Retries.** The default transport now repeats a request that provably never reached
   Unitpay — DNS failure, refused connection, connect timeout — up to twice, with capped
@@ -169,7 +191,9 @@ signature, which is verified first.
    decide `$requestSent` deliberately — `false` when unsure.
 2. Drop any string matching on `"Temporary server error"`.
 3. Confirm your webhook host runs NTP, or call `setWebhookTolerance()`.
-4. Optionally: set the telemetry slots, tune the timeouts, decide whether you want retries.
+4. If anything on your side reads the SDK's outgoing headers, follow the
+   `X-Unitpay-Client` → `Unitpay-Client` rename.
+5. Optionally: set the telemetry slots, tune the timeouts, decide whether you want retries.
 
 ## See Also
 
