@@ -27,8 +27,9 @@ Official Unitpay documentation: [help.unitpay.ru](https://help.unitpay.ru)
 
 * PHP >= 7.4
 * ext-json
+* ext-ctype
 
-No runtime dependencies. `ext-curl` is optional: the default transport uses it when
+No Composer dependencies. `ext-curl` is optional: the default transport uses it when
 present and falls back to `file_get_contents()` otherwise.
 
 ## Installation
@@ -83,7 +84,7 @@ Prefer a server-to-server call? Use `$unitpay->payments()->initPayment(...)` —
 * **Swappable transport** — inject any `Unitpay\Http\TransportInterface` to plug in your
   own HTTP stack or to test without the network.
 * **Typed exceptions** — all implement `UnitpayExceptionInterface`.
-* **Zero dependencies** — `ext-json` only (`ext-curl` optional).
+* **Zero dependencies** — no Composer packages; `ext-json` + `ext-ctype` (`ext-curl` optional).
 
 ## Documentation
 

@@ -29,7 +29,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: json, curl
+          extensions: json, ctype, curl
           coverage: none
 
       - name: Install dependencies
@@ -54,7 +54,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: json, curl
+          extensions: json, ctype, curl
           coverage: none
 
       - name: Install dependencies
@@ -68,6 +68,10 @@ jobs:
 
       - name: Static analysis (PHPStan)
         run: composer stan
+
+      # examples/ sits outside phpstan.neon, and composer lint only syntax-checks it.
+      - name: Static analysis (examples)
+        run: composer stan-examples
 
       - name: Mess detection (PHPMD)
         run: composer md

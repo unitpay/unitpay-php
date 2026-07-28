@@ -13,7 +13,8 @@
   ],
   "require":{
     "php": ">=7.4",
-    "ext-json": "*"
+    "ext-json": "*",
+    "ext-ctype": "*"
   },
   "require-dev": {
     "phpunit/phpunit": "^9.6",
@@ -38,7 +39,8 @@
   "scripts": {
     "test": "phpunit",
     "lint": "parallel-lint src examples tests",
-    "stan": "phpstan analyse --no-progress",
+    "stan": "@php -d memory_limit=512M vendor/bin/phpstan analyse --no-progress",
+    "stan-examples": "@php -d memory_limit=512M vendor/bin/phpstan analyse --no-progress --configuration=phpstan-examples.neon",
     "cs-check": "php-cs-fixer fix --dry-run --diff",
     "cs-fix": "php-cs-fixer fix",
     "md": "@php -d error_reporting=\"E_ALL & ~E_DEPRECATED\" vendor/bin/phpmd src text phpmd.xml",
@@ -46,6 +48,7 @@
       "@lint",
       "@cs-check",
       "@stan",
+      "@stan-examples",
       "@md",
       "@test"
     ]
@@ -53,7 +56,8 @@
   "scripts-descriptions": {
     "test": "Run the PHPUnit test suite",
     "lint": "Syntax-lint every PHP file in parallel",
-    "stan": "Run PHPStan static analysis",
+    "stan": "Run PHPStan static analysis on src/ and tests/ (level 8)",
+    "stan-examples": "Run PHPStan over examples/ (level 0) to catch a usage sample broken by a public-surface change",
     "cs-check": "Report code-style violations without changing files",
     "cs-fix": "Apply code-style fixes in place",
     "md": "Run PHPMD mess detection on src/",

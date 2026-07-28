@@ -6,8 +6,9 @@
 
 * PHP >= 7.4
 * ext-json
+* ext-ctype
 
-No runtime dependencies. The SDK is a PSR-4 package: namespace `Unitpay\` maps to `src/`,
+No Composer dependencies. The SDK is a PSR-4 package: namespace `Unitpay\` maps to `src/`,
 with `Unitpay\Unitpay` as the single entry point. `ext-curl` is optional — the default
 transport uses it when present and falls back to `file_get_contents()` otherwise.
 
