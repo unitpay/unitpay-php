@@ -118,7 +118,7 @@ final class Unitpay
     /**
      * Names the CMS this integration runs on, e.g. setCms('Bitrix', '22.0').
      *
-     * The value rides along in User-Agent and X-Unitpay-Client on every service call. It
+     * The value rides along in User-Agent and Unitpay-Client on every service call. It
      * is a product name and version only — no PII, no identifiers. Most Unitpay
      * integrations are CMS modules, and without this the fingerprint cannot tell one
      * apart from a bare script.
@@ -155,7 +155,7 @@ final class Unitpay
     }
 
     /**
-     * Stops sending the X-Unitpay-Client header. The User-Agent keeps naming the SDK and
+     * Stops sending the Unitpay-Client header. The User-Agent keeps naming the SDK and
      * its version, which is what makes a request supportable at all.
      */
     public function disableTelemetry(): self

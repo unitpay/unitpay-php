@@ -169,7 +169,7 @@ final class RetryingTransportTest extends TestCase
         $inner = new FakeTransport(Response::failed(7, 'Connection refused', false));
         $transport = new SleeplessRetryingTransport($inner, 2);
         $url = 'https://unitpay.test/api?method=initPayment&sum=100&signature=abc';
-        $headers = ['User-Agent: unitpay-php-sdk/4.0.0', 'X-Unitpay-Client: {"lang":"php"}'];
+        $headers = ['User-Agent: unitpay-php-sdk/4.0.0', 'Unitpay-Client: {"lang":"php"}'];
 
         $transport->request($url, $headers);
 
@@ -179,7 +179,7 @@ final class RetryingTransportTest extends TestCase
         $this->assertSame($url, $inner->url(2));
         foreach ([0, 1, 2] as $attempt) {
             $this->assertSame('unitpay-php-sdk/4.0.0', $inner->header('User-Agent', $attempt));
-            $this->assertSame('{"lang":"php"}', $inner->header('X-Unitpay-Client', $attempt));
+            $this->assertSame('{"lang":"php"}', $inner->header('Unitpay-Client', $attempt));
         }
     }
 

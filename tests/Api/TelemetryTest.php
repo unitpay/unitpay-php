@@ -21,7 +21,7 @@ final class TelemetryTest extends TestCase
         $unitpay->payments()->getPayment(1);
 
         $ua = $transport->header('User-Agent');
-        $client = $transport->header('X-Unitpay-Client');
+        $client = $transport->header('Unitpay-Client');
 
         $this->assertSame('unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION, $ua);
 
@@ -49,10 +49,30 @@ final class TelemetryTest extends TestCase
         $this->assertStringContainsString('Bitrix/22.0', $ua);
         $this->assertStringContainsString('unitpay-bitrix/3.1', $ua);
 
-        $decoded = json_decode((string) $transport->header('X-Unitpay-Client'), true);
-        $this->assertSame('Laravel/11.0', $decoded['framework']);
-        $this->assertSame('Bitrix/22.0', $decoded['cms']);
-        $this->assertSame('unitpay-bitrix/3.1', $decoded['module']);
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(['name' => 'Laravel', 'version' => '11.0'], $decoded['framework']);
+        $this->assertSame(['name' => 'Bitrix', 'version' => '22.0'], $decoded['cms']);
+        $this->assertSame(['name' => 'unitpay-bitrix', 'version' => '3.1'], $decoded['module']);
+    }
+
+    /**
+     * The reason the JSON header carries an object rather than a joined string: a Composer
+     * package name contains the separator, so "unitpay/woocommerce/2.1" gives a consumer
+     * three segments and one delimiter to guess between.
+     */
+    public function testANameContainingASlashStaysSeparable(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setModule('unitpay/woocommerce', '2.1');
+
+        $unitpay->payments()->getPayment(1);
+
+        $client = (string) $transport->header('Unitpay-Client');
+        $this->assertStringContainsString('"module":{"name":"unitpay/woocommerce"', $client);
+
+        $decoded = json_decode($client, true);
+        $this->assertSame(['name' => 'unitpay/woocommerce', 'version' => '2.1'], $decoded['module']);
     }
 
     /** An unset slot must not appear at all, rather than appear empty. */
@@ -64,7 +84,7 @@ final class TelemetryTest extends TestCase
 
         $unitpay->payments()->getPayment(1);
 
-        $decoded = json_decode((string) $transport->header('X-Unitpay-Client'), true);
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
         $this->assertArrayHasKey('module', $decoded);
         $this->assertArrayNotHasKey('cms', $decoded);
         $this->assertArrayNotHasKey('framework', $decoded);
@@ -96,7 +116,7 @@ final class TelemetryTest extends TestCase
 
         $unitpay->payments()->getPayment(1);
 
-        $this->assertNull($transport->header('X-Unitpay-Client'));
+        $this->assertNull($transport->header('Unitpay-Client'));
         $this->assertSame('unitpay-php-sdk/' . Unitpay::VERSION, $transport->header('User-Agent'));
     }
 
@@ -135,6 +155,6 @@ final class TelemetryTest extends TestCase
         $unitpay->webhook()->refreshAllowedIps();
 
         $this->assertNull($transport->header('User-Agent'));
-        $this->assertNull($transport->header('X-Unitpay-Client'));
+        $this->assertNull($transport->header('Unitpay-Client'));
     }
 }
