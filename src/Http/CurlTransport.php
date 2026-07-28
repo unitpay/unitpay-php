@@ -56,11 +56,38 @@ final class CurlTransport implements TransportInterface
      */
     public function request(string $url, array $headers = []): Response
     {
+        $headers = self::sanitizeHeaders($headers);
+
         if (function_exists('curl_init')) {
             return $this->requestViaCurl($url, $headers);
         }
 
         return $this->requestViaStream($url, $headers);
+    }
+
+    /**
+     * Drops any header line carrying a CR or an LF.
+     *
+     * The stream path joins header lines with "\r\n", so a newline inside a value adds a
+     * header line of the caller's choosing. Since 4.0.0 nothing the SDK itself builds can
+     * contain one — `Telemetry\ClientInfo` strips control characters where the value comes
+     * in — which is exactly why this is the second line of defence and not the first.
+     *
+     * The offending line is dropped rather than raised on: a transport that aborts a
+     * payment over a malformed diagnostic header would repeat the mistake this release
+     * removed from the telemetry setters.
+     *
+     * Public and static so it can be exercised without a socket — the request paths
+     * themselves talk to the network and are not covered by the suite.
+     *
+     * @param string[] $headers
+     * @return string[]
+     */
+    public static function sanitizeHeaders(array $headers): array
+    {
+        return array_values(array_filter($headers, static function (string $header): bool {
+            return strpbrk($header, "\r\n") === false;
+        }));
     }
 
     /**

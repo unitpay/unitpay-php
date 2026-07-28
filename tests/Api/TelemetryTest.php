@@ -4,7 +4,6 @@ namespace Tests\Api;
 
 use PHPUnit\Framework\TestCase;
 use Tests\Support\FakeTransport;
-use Unitpay\Exception\UnitpayValidationException;
 use Unitpay\Unitpay;
 
 /**
@@ -121,19 +120,27 @@ final class TelemetryTest extends TestCase
     }
 
     /**
-     * A blank half would emit a meaningless "Bitrix/" or "/22.0" token, which is worse
-     * than sending nothing.
+     * A blank half would emit a meaningless "Bitrix/" or "/22.0" token, so the slot is
+     * dropped — but dropped silently. These setters run in an integration's bootstrap, and
+     * a CMS that stops exposing its version string must cost a field in a header, not a
+     * checkout.
      *
      * @dataProvider incompleteSlots
      */
-    public function testAnIncompleteSlotIsRejected(string $name, string $version): void
+    public function testAnIncompleteSlotIsIgnoredRatherThanRejected(string $name, string $version): void
     {
-        $unitpay = new Unitpay('unitpay.test', 'secret', new FakeTransport());
-
-        $this->expectException(UnitpayValidationException::class);
-        $this->expectExceptionMessage('needs both a name and a version');
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
 
         $unitpay->setCms($name, $version);
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertArrayNotHasKey('cms', $decoded);
+        $this->assertSame(
+            'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
+            $transport->header('User-Agent')
+        );
     }
 
     /** @return array<string, array{string, string}> */
@@ -144,6 +151,110 @@ final class TelemetryTest extends TestCase
             'empty version' => ['Bitrix', ''],
             'blank name' => ['   ', '22.0'],
         ];
+    }
+
+    /**
+     * trim() only cleans the edges, so a CR/LF in the middle of a value used to reach the
+     * transport — which joins header lines with "\r\n" — and add a header line of the
+     * caller's choosing. Slot values often come from a module's settings screen.
+     */
+    public function testControlCharactersCannotAddAHeaderLine(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setModule("evil\r\nX-Injected: 1", '1.0');
+
+        $unitpay->payments()->getPayment(1);
+
+        $ua = (string) $transport->header('User-Agent');
+        $this->assertStringNotContainsString("\r", $ua);
+        $this->assertStringNotContainsString("\n", $ua);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame('evilX-Injected: 1', $decoded['module']['name']);
+    }
+
+    /** A value that is nothing but control characters has no usable half left. */
+    public function testAValueOfOnlyControlCharactersDropsTheSlot(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setCms("\r\n\t", '22.0');
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertArrayNotHasKey('cms', $decoded);
+    }
+
+    /**
+     * The cap counts bytes, so it can land inside a multi-byte character. 30 three-byte
+     * characters are 90 bytes; cutting at 64 leaves one stray byte, which must be dropped
+     * rather than shipped as a broken sequence.
+     */
+    public function testAnOverlongValueIsTruncatedOnACharacterBoundary(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setCms(str_repeat('中', 30), '1.0');
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(str_repeat('中', 21), $decoded['cms']['name']);
+        $this->assertSame(1, preg_match('//u', $decoded['cms']['name']));
+    }
+
+    /**
+     * json_encode returns false on invalid UTF-8, and the old `(string)` cast turned that
+     * into an empty header — so one legacy windows-1251 CMS name cost the entire payload,
+     * sdk_version and lang_version included.
+     */
+    public function testAnInvalidlyEncodedNameCannotBlankTheHeader(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        // "Битрикс" as a legacy windows-1251 install would hand it over: not valid UTF-8.
+        $unitpay->setCms("\xC1\xE8\xF2\xF0\xE8\xEA\xF1", '22.0');
+
+        $unitpay->payments()->getPayment(1);
+
+        $client = (string) $transport->header('Unitpay-Client');
+        $this->assertNotSame('', $client);
+
+        $decoded = json_decode($client, true);
+        $this->assertSame(Unitpay::VERSION, $decoded['sdk_version']);
+        $this->assertSame(PHP_VERSION, $decoded['lang_version']);
+        $this->assertArrayHasKey('cms', $decoded);
+
+        $this->assertSame(
+            'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
+            $transport->header('User-Agent')
+        );
+    }
+
+    /**
+     * A User-Agent is an ASCII field. The JSON header keeps the name losslessly through
+     * \uXXXX escaping, which is also what keeps that header value itself ASCII.
+     */
+    public function testANonAsciiNameRidesInTheJsonHeaderOnly(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setCms('1С-Битрикс', '22.0');
+
+        $unitpay->payments()->getPayment(1);
+
+        $client = (string) $transport->header('Unitpay-Client');
+        $this->assertSame(1, preg_match('/^[\x20-\x7E]+$/', $client));
+
+        $decoded = json_decode($client, true);
+        $this->assertSame(['name' => '1С-Битрикс', 'version' => '22.0'], $decoded['cms']);
+
+        $this->assertSame(
+            'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
+            $transport->header('User-Agent')
+        );
     }
 
     /** The IP-feed fetch is a plain GET: no fingerprint headers ride along with it. */

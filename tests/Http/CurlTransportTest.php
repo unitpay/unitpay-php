@@ -73,4 +73,31 @@ final class CurlTransportTest extends TestCase
             $this->assertStringContainsString('-3', $e->getMessage());
         }
     }
+
+    /**
+     * The stream path joins header lines with "\r\n", so a newline inside a value would add
+     * a header line of the caller's choosing. Nothing the SDK builds can carry one — this
+     * is the second line of defence, and it drops the line rather than raising, because a
+     * transport must not abort a payment over a diagnostic header.
+     */
+    public function testHeaderLinesCarryingANewlineAreDropped(): void
+    {
+        $sanitized = CurlTransport::sanitizeHeaders([
+            'User-Agent: unitpay-php-sdk/4.0.0',
+            "Unitpay-Client: {\"lang\":\"php\"}\r\nX-Injected: 1",
+            'Accept: application/json',
+        ]);
+
+        $this->assertSame(
+            ['User-Agent: unitpay-php-sdk/4.0.0', 'Accept: application/json'],
+            $sanitized
+        );
+    }
+
+    public function testOrdinaryHeaderLinesPassThroughUnchanged(): void
+    {
+        $headers = ['User-Agent: unitpay-php-sdk/4.0.0', 'Unitpay-Client: {"lang":"php"}'];
+
+        $this->assertSame($headers, CurlTransport::sanitizeHeaders($headers));
+    }
 }

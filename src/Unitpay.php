@@ -123,7 +123,8 @@ final class Unitpay
      * integrations are CMS modules, and without this the fingerprint cannot tell one
      * apart from a bare script.
      *
-     * @throws UnitpayValidationException on an empty name or version
+     * A blank name or version is ignored rather than rejected: telemetry never throws into
+     * a payment flow.
      */
     public function setCms(string $name, string $version): self
     {
@@ -134,7 +135,7 @@ final class Unitpay
     /**
      * Names the framework this integration runs on, e.g. setFramework('Laravel', '11.0').
      *
-     * @throws UnitpayValidationException on an empty name or version
+     * A blank name or version is ignored rather than rejected.
      */
     public function setFramework(string $name, string $version): self
     {
@@ -146,7 +147,7 @@ final class Unitpay
      * Names the module or plugin wrapping this SDK, e.g.
      * setModule('unitpay-bitrix', '3.1').
      *
-     * @throws UnitpayValidationException on an empty name or version
+     * A blank name or version is ignored rather than rejected.
      */
     public function setModule(string $name, string $version): self
     {
