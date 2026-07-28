@@ -174,6 +174,23 @@ final class TelemetryTest extends TestCase
         $this->assertSame('evilX-Injected: 1', $decoded['module']['name']);
     }
 
+    /**
+     * Ignoring a blank value means leaving the slot alone, not clearing it: a setter that
+     * starts coming back empty costs the update, not the value already reported.
+     */
+    public function testABlankOverwriteLeavesTheEarlierValueInPlace(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setCms('Bitrix', '22.0');
+        $unitpay->setCms('Bitrix', '');
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(['name' => 'Bitrix', 'version' => '22.0'], $decoded['cms']);
+    }
+
     /** A value that is nothing but control characters has no usable half left. */
     public function testAValueOfOnlyControlCharactersDropsTheSlot(): void
     {

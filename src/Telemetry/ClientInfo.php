@@ -72,7 +72,9 @@ final class ClientInfo
         $name = self::clean($name, self::MAX_NAME_BYTES);
         $version = self::clean($version, self::MAX_VERSION_BYTES);
         if ($name === '' || $version === '') {
-            // A blank half would emit a meaningless "/1.0" or "Bitrix/" token.
+            // A blank half would emit a meaningless "/1.0" or "Bitrix/" token. Returning
+            // leaves any earlier value in place, so a setter that starts coming back empty
+            // costs the update rather than the slot.
             return;
         }
 

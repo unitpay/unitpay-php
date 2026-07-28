@@ -49,8 +49,9 @@ through service objects that were already created.
 integration's bootstrap, so nothing here raises on the values you pass:
 
 * An unset slot is omitted rather than sent empty.
-* A blank name or version is ignored — the slot is simply not sent. A CMS that stops
-  exposing its version string costs you a field in a header, not a checkout.
+* A blank name or version is ignored — the call leaves the slot as it was. If nothing was
+  set before, nothing is sent; if the slot already held a value, that value stays. A CMS
+  that stops exposing its version string costs you a field in a header, not a checkout.
 * Control characters are stripped, and each half is capped (64 bytes for a name, 32 for a
   version) so a stray value cannot bloat the header.
 * A non-ASCII name (`1С-Битрикс`) rides in the JSON header only. A `User-Agent` is an ASCII
