@@ -57,10 +57,10 @@
     "test": "Run the PHPUnit test suite",
     "lint": "Syntax-lint every PHP file in parallel",
     "stan": "Run PHPStan static analysis on src/ and tests/ (level 8)",
-    "stan-examples": "Run PHPStan over examples/ (level 0) to catch a usage sample broken by a public-surface change",
+    "stan-examples": "Run PHPStan over examples/ (level 2) to catch a usage sample broken by a public-surface change",
     "cs-check": "Report code-style violations without changing files",
     "cs-fix": "Apply code-style fixes in place",
     "md": "Run PHPMD mess detection on src/",
-    "check": "Run lint, cs-check, stan, md and test in sequence"
+    "check": "Run lint, cs-check, stan, stan-examples, md and test in sequence"
   }
 }

@@ -155,24 +155,34 @@ signature, which is verified first.
 
 ## 4. The client header was renamed
 
-`X-Unitpay-Client` is now `Unitpay-Client`, and each telemetry slot inside it is an object
-rather than a joined string:
+`X-Unitpay-Client` is now `Unitpay-Client`. The fixed fields inside it are unchanged:
 
 ```diff
--X-Unitpay-Client: {"sdk_version":"4.0.0", ..., "cms":"Bitrix/22.0"}
-+Unitpay-Client: {"sdk_version":"4.0.0", ..., "cms":{"name":"Bitrix","version":"22.0"}}
+-X-Unitpay-Client: {"sdk_version":"3.0.0","api_version":"v1","lang":"php", ...}
++Unitpay-Client: {"sdk_version":"4.0.0","api_version":"v1","lang":"php", ...}
 ```
 
-The `X-` prefix was retired by [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) in 2012,
-and the joined value forced a consumer to split on `/` — a separator a product name may
-itself contain, `unitpay/woocommerce` being the obvious case.
+The `X-` prefix was retired by [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) in 2012.
+
+Two optional fields are new in 4.0, and both carry name and version as separate keys rather
+than a joined `Name/Version` string — a product name may itself contain a `/`, and the most
+natural module name to pass is the Composer package name:
+
+```json
+{"sdk_version":"4.0.0", ...,
+ "module":{"name":"unitpay-woocommerce","version":"2.1"},
+ "stack":[{"name":"WordPress","version":"6.5"},{"name":"WooCommerce","version":"8.2"}]}
+```
+
+Neither key is sent unless you fill it in with `setModule()` / `setStack()` — see section 6.
+The `User-Agent` keeps the readable joined token, because that field cannot carry structure.
 
 This affects you only if something on your side reads the SDK's own outgoing headers: a
 custom transport that logs them, or a test that asserts on them. The SDK sends one name,
 not both — but note that 2.x and 3.x installs keep sending `X-Unitpay-Client`, so anything
 parsing this header has to accept both names for as long as those versions are in the field.
 
-See [Telemetry](telemetry.md) for the full payload and the slot rules.
+See [Telemetry](telemetry.md) for the full payload and the input-handling rules.
 
 ## 5. The deprecated `PaymentObject` values are gone
 

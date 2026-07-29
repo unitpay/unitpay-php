@@ -94,7 +94,7 @@ Prefer a server-to-server call? Use `$unitpay->payments()->initPayment(...)` —
 | [Fiscal Receipts](docs/receipts.md) | 54-FZ receipt line items via `CashItem` |
 | [API Methods](docs/api-methods.md) | Full service reference and account-level calls |
 | [Webhooks](docs/webhooks.md) | Payment handler + keeping the IP allowlist fresh |
-| [Telemetry](docs/telemetry.md) | Anonymous SDK fingerprint and the CMS/module slots |
+| [Telemetry](docs/telemetry.md) | Anonymous SDK fingerprint and naming your integration |
 | [v4 Migration Guide](docs/migration-v4.md) | Upgrading from 3.x to 4.0 |
 | [v3 Migration Guide](docs/migration-v3.md) | Upgrading from 2.x to 3.0 |
 
