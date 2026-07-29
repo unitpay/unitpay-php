@@ -2,13 +2,14 @@
 
 [← Getting Started](getting-started.md) · [Back to README](../README.md) · [Migrating to v3 →](migration-v3.md)
 
-Three things break in 4.0, and only one of them affects most integrations.
+Four things break in 4.0, and only one of them affects most integrations.
 
 | Change | Affects you if… | Effort |
 | --- | --- | --- |
 | `TransportInterface` returns a `Response` | you wrote your own transport | ~10 lines |
 | Stale webhooks are rejected | your handler runs more than 5 minutes behind, or your clock drifts | one call, or nothing |
 | `X-Unitpay-Client` renamed to `Unitpay-Client` | something on your side reads the SDK's own outgoing headers | one rename |
+| Five deprecated `PaymentObject` values removed | you name `EXCISE`, `GAMBLING_BET`, `GAMBLING_PRIZE`, `LOTTERY_PRIZE` or `COMPOSITE` | one constant, or nothing |
 
 Everything else is additive: configurable timeouts, retries for requests that never left
 the client, and telemetry slots. If you use the SDK's own transport and your server clock
@@ -173,7 +174,36 @@ parsing this header has to accept both names for as long as those versions are i
 
 See [Telemetry](telemetry.md) for the full payload and the slot rules.
 
-## 5. What you get without doing anything
+## 5. The deprecated `PaymentObject` values are gone
+
+Five constants were removed from `Unitpay\Model\Enum\PaymentObject`:
+
+```text
+EXCISE  GAMBLING_BET  GAMBLING_PRIZE  LOTTERY_PRIZE  COMPOSITE
+```
+
+The public API rejects all five and always has — that is why they were deprecated back in
+2.1.0. They were kept through 3.0 only to avoid stacking a dictionary change on top of the
+namespace break, with the removal re-slated for 4.0. This is that removal.
+
+Whether this touches you depends on how you name the value, not on which value you send:
+
+* **You pass the constant** — `new CashItem('Ticket', 1, 100, Nds::NONE, PaymentObject::LOTTERY_PRIZE)`.
+  This breaks at load time with `Error: Undefined constant`. Pick a supported value from
+  `PaymentObject`; the receipt line was never going to fiscalize with the old one anyway.
+* **You pass the raw string** — `new CashItem('Ticket', 1, 100, Nds::NONE, 'lottery_prize')`.
+  Nothing changes for you. `CashItem` does not validate `$type` against a whitelist, so the
+  string travels to the backend and is rejected there, exactly as before this release.
+
+To find the first case, grep your integration for the five names:
+
+```sh
+grep -rn 'PaymentObject::\(EXCISE\|GAMBLING_BET\|GAMBLING_PRIZE\|LOTTERY_PRIZE\|COMPOSITE\)' .
+```
+
+See [Receipts](receipts.md) for the supported dictionary.
+
+## 6. What you get without doing anything
 
 * **Retries.** The default transport now repeats a request that provably never reached
   Unitpay — DNS failure, refused connection, connect timeout — up to twice, with capped
@@ -193,7 +223,9 @@ See [Telemetry](telemetry.md) for the full payload and the slot rules.
 3. Confirm your webhook host runs NTP, or call `setWebhookTolerance()`.
 4. If anything on your side reads the SDK's outgoing headers, follow the
    `X-Unitpay-Client` → `Unitpay-Client` rename.
-5. Optionally: set the telemetry slots, tune the timeouts, decide whether you want retries.
+5. Grep for `PaymentObject::EXCISE`, `GAMBLING_BET`, `GAMBLING_PRIZE`, `LOTTERY_PRIZE` and
+   `COMPOSITE` — those five constants are gone.
+6. Optionally: set the telemetry slots, tune the timeouts, decide whether you want retries.
 
 ## See Also
 

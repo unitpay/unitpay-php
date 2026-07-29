@@ -47,10 +47,6 @@ classes with `public const`, not native enums, because the SDK supports PHP 7.4.
 > separate path for "real" 20%. Pick the rate that matches the actual receipt (see
 > [CHANGELOG.md](../CHANGELOG.md)).
 
-Some payment-object values are kept only for backward compatibility and are rejected by
-the public API: `EXCISE`, `GAMBLING_BET`, `GAMBLING_PRIZE`, `LOTTERY_PRIZE`, `COMPOSITE`.
-Do not use them in new code; they are slated for removal in 4.0.
-
 ## See Also
 
 * [Getting Started](getting-started.md) — create a payment with `form()` or the API
