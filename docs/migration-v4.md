@@ -12,7 +12,7 @@ Four things break in 4.0, and only one of them affects most integrations.
 | Five deprecated `PaymentObject` values removed | you name `EXCISE`, `GAMBLING_BET`, `GAMBLING_PRIZE`, `LOTTERY_PRIZE` or `COMPOSITE` | one constant, or nothing |
 
 Everything else is additive: configurable timeouts, retries for requests that never left
-the client, and telemetry slots. If you use the SDK's own transport and your server clock
+the client, and the telemetry identity calls. If you use the SDK's own transport and your clock
 is synchronised, upgrading is a version bump.
 
 Coming from 2.x? Do [the v3 migration](migration-v3.md) first — that one moved every class
@@ -212,8 +212,10 @@ See [Receipts](receipts.md) for the supported dictionary.
   `DefaultTransport::withoutRetries()`.
 * **Configurable timeouts.** `new CurlTransport($connectTimeout, $timeout)`, defaulting to
   the previous 5s/10s.
-* **Telemetry slots.** `setCms()`, `setFramework()`, `setModule()` — see
-  [Telemetry](telemetry.md). Worth filling in if you ship a CMS module.
+* **Integration identity in telemetry.** `setModule('unitpay-woocommerce', '2.1')` names what
+  you shipped, `setStack(['WordPress' => '6.5', 'WooCommerce' => '8.2'])` names what it runs
+  on — see [Telemetry](telemetry.md). Worth filling in if you ship a module, a plugin or a
+  template.
 
 ## Checklist
 
@@ -225,7 +227,8 @@ See [Receipts](receipts.md) for the supported dictionary.
    `X-Unitpay-Client` → `Unitpay-Client` rename.
 5. Grep for `PaymentObject::EXCISE`, `GAMBLING_BET`, `GAMBLING_PRIZE`, `LOTTERY_PRIZE` and
    `COMPOSITE` — those five constants are gone.
-6. Optionally: set the telemetry slots, tune the timeouts, decide whether you want retries.
+6. Optionally: name your integration with `setModule()` / `setStack()`, tune the timeouts,
+   decide whether you want retries.
 
 ## See Also
 

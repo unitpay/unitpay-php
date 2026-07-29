@@ -18,8 +18,8 @@ $secretKey = getenv('UNITPAY_SECRET_KEY') ?: 'set-me-in-env';
 $login            = getenv('UNITPAY_LOGIN') ?: 'partner@example.com';
 $accountSecretKey = getenv('UNITPAY_ACCOUNT_SECRET_KEY') ?: 'set-account-key-in-env';
 
-// Integration identity: name the CMS, framework and module wrapping the SDK. These ride
-// along in User-Agent / Unitpay-Client on every service call and are product names and
+// Integration identity: setModule() names what you wrote, setStack() what it runs on. These
+// ride along in User-Agent / Unitpay-Client on every service call and are product names and
 // versions only — no PII. Skip them for a bare script; fill them in if you ship a module.
-// $unitpay->setCms('Bitrix', '22.0')->setModule('unitpay-bitrix', '3.1');
+// $unitpay->setModule('unitpay-bitrix', '3.1')->setStack(['Bitrix' => '22.0']);
 // Opt out entirely with $unitpay->disableTelemetry().
