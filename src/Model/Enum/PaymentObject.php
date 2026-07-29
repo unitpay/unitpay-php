@@ -58,15 +58,4 @@ final class PaymentObject
     public const COMMODITY_WITHOUT_MARK = 'commodity_without_mark';
     /** Commodity subject to marking, with a mark code */
     public const COMMODITY_MARK = 'commodity_mark';
-
-    /** @deprecated Rejected by the public API; will be removed in 4.0. */
-    public const EXCISE = 'excise';
-    /** @deprecated Rejected by the public API; will be removed in 4.0. */
-    public const GAMBLING_BET = 'gambling_bet';
-    /** @deprecated Rejected by the public API; will be removed in 4.0. */
-    public const GAMBLING_PRIZE = 'gambling_prize';
-    /** @deprecated Rejected by the public API; will be removed in 4.0. */
-    public const LOTTERY_PRIZE = 'lottery_prize';
-    /** @deprecated Rejected by the public API; will be removed in 4.0. */
-    public const COMPOSITE = 'composite';
 }
