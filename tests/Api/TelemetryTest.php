@@ -33,25 +33,98 @@ final class TelemetryTest extends TestCase
         $this->assertSame('unitpay', $decoded['publisher']);
     }
 
-    public function testIntegrationSlotsReachBothHeaders(): void
+    public function testModuleAndStackReachBothHeaders(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setFramework('Laravel', '11.0')
-            ->setCms('Bitrix', '22.0')
-            ->setModule('unitpay-bitrix', '3.1');
+        $unitpay->setModule('unitpay-woocommerce', '2.1')
+            ->setStack(['WordPress' => '6.5', 'WooCommerce' => '8.2']);
 
         $unitpay->payments()->getPayment(1);
 
-        $ua = (string) $transport->header('User-Agent');
-        $this->assertStringContainsString('Laravel/11.0', $ua);
-        $this->assertStringContainsString('Bitrix/22.0', $ua);
-        $this->assertStringContainsString('unitpay-bitrix/3.1', $ua);
+        // Outermost host first, the module last as the narrowest context.
+        $this->assertSame(
+            'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION
+                . ' WordPress/6.5 WooCommerce/8.2 unitpay-woocommerce/2.1',
+            $transport->header('User-Agent')
+        );
 
         $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
-        $this->assertSame(['name' => 'Laravel', 'version' => '11.0'], $decoded['framework']);
-        $this->assertSame(['name' => 'Bitrix', 'version' => '22.0'], $decoded['cms']);
-        $this->assertSame(['name' => 'unitpay-bitrix', 'version' => '3.1'], $decoded['module']);
+        $this->assertSame(['name' => 'unitpay-woocommerce', 'version' => '2.1'], $decoded['module']);
+        $this->assertSame(
+            [
+                ['name' => 'WordPress', 'version' => '6.5'],
+                ['name' => 'WooCommerce', 'version' => '8.2'],
+            ],
+            $decoded['stack']
+        );
+    }
+
+    /**
+     * The four-layer stack the three fixed slots could not express: a solution on top of a
+     * CMS, with the payment module on top of that.
+     */
+    public function testAFourLayerStackIsExpressible(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setModule('unitpay-bitrix', '3.1')
+            ->setStack(['Bitrix' => '22.0', 'Aspro Optimus' => '1.8.2']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(
+            ['Bitrix', 'Aspro Optimus'],
+            array_column($decoded['stack'], 'name')
+        );
+        $this->assertSame('unitpay-bitrix', $decoded['module']['name']);
+    }
+
+    /** Idempotent by design, so a bootstrap that runs twice cannot double the stack. */
+    public function testSetStackReplacesRatherThanAppends(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack(['WordPress' => '6.5']);
+        $unitpay->setStack(['Bitrix' => '22.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame([['name' => 'Bitrix', 'version' => '22.0']], $decoded['stack']);
+    }
+
+    /** A list was passed where a map was meant; "0" is not a product name. */
+    public function testANumericKeyIsDropped(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack(['WordPress', 'Bitrix' => '22.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame([['name' => 'Bitrix', 'version' => '22.0']], $decoded['stack']);
+    }
+
+    /** A list bounds the header where three fixed slots used to bound it for free. */
+    public function testTheStackIsCappedAtEightEntries(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+
+        $stack = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $stack['Product' . $i] = '1.0';
+        }
+        $unitpay->setStack($stack);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertCount(8, $decoded['stack']);
+        $this->assertSame('Product8', $decoded['stack'][7]['name']);
     }
 
     /**
@@ -74,33 +147,49 @@ final class TelemetryTest extends TestCase
         $this->assertSame(['name' => 'unitpay/woocommerce', 'version' => '2.1'], $decoded['module']);
     }
 
-    /** An unset slot must not appear at all, rather than appear empty. */
-    public function testUnsetSlotsAreOmitted(): void
+    /**
+     * An empty stack must not appear at all, rather than appear as `[]` — an integration with
+     * nothing under it, such as a bare script or a Telegram bot, is an ordinary case.
+     */
+    public function testAnEmptyStackIsOmitted(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setModule('unitpay-bitrix', '3.1');
+        $unitpay->setModule('unitpay-telegram-bot-template', '1.0');
 
         $unitpay->payments()->getPayment(1);
 
         $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
         $this->assertArrayHasKey('module', $decoded);
-        $this->assertArrayNotHasKey('cms', $decoded);
-        $this->assertArrayNotHasKey('framework', $decoded);
+        $this->assertArrayNotHasKey('stack', $decoded);
+    }
+
+    /** And the same the other way round: a stack with no module named. */
+    public function testAnUnsetModuleIsOmitted(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack(['Laravel' => '11.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertArrayHasKey('stack', $decoded);
+        $this->assertArrayNotHasKey('module', $decoded);
     }
 
     /**
-     * The facade caches service objects on first use, so a slot set afterwards has to
+     * The facade caches service objects on first use, so a value set afterwards has to
      * reach the service that already exists — which only works because ClientInfo is
      * shared by reference rather than copied into the service at construction.
      */
-    public function testASlotSetAfterAServiceWasBuiltStillTakesEffect(): void
+    public function testAValueSetAfterAServiceWasBuiltStillTakesEffect(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
 
         $unitpay->payments()->getPayment(1);
-        $unitpay->setCms('Bitrix', '22.0');
+        $unitpay->setStack(['Bitrix' => '22.0']);
         $unitpay->payments()->getPayment(2);
 
         $this->assertStringNotContainsString('Bitrix/22.0', (string) $transport->header('User-Agent', 0));
@@ -111,7 +200,7 @@ final class TelemetryTest extends TestCase
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setCms('Bitrix', '22.0')->disableTelemetry();
+        $unitpay->setStack(['Bitrix' => '22.0'])->disableTelemetry();
 
         $unitpay->payments()->getPayment(1);
 
@@ -120,23 +209,23 @@ final class TelemetryTest extends TestCase
     }
 
     /**
-     * A blank half would emit a meaningless "Bitrix/" or "/22.0" token, so the slot is
+     * A blank half would emit a meaningless "Bitrix/" or "/22.0" token, so the value is
      * dropped — but dropped silently. These setters run in an integration's bootstrap, and
      * a CMS that stops exposing its version string must cost a field in a header, not a
      * checkout.
      *
-     * @dataProvider incompleteSlots
+     * @dataProvider incompleteValues
      */
-    public function testAnIncompleteSlotIsIgnoredRatherThanRejected(string $name, string $version): void
+    public function testAnIncompleteModuleIsIgnoredRatherThanRejected(string $name, string $version): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
 
-        $unitpay->setCms($name, $version);
+        $unitpay->setModule($name, $version);
         $unitpay->payments()->getPayment(1);
 
         $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
-        $this->assertArrayNotHasKey('cms', $decoded);
+        $this->assertArrayNotHasKey('module', $decoded);
         $this->assertSame(
             'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
             $transport->header('User-Agent')
@@ -144,7 +233,7 @@ final class TelemetryTest extends TestCase
     }
 
     /** @return array<string, array{string, string}> */
-    public function incompleteSlots(): array
+    public function incompleteValues(): array
     {
         return [
             'empty name' => ['', '22.0'],
@@ -175,33 +264,33 @@ final class TelemetryTest extends TestCase
     }
 
     /**
-     * Ignoring a blank value means leaving the slot alone, not clearing it: a setter that
-     * starts coming back empty costs the update, not the value already reported.
+     * Ignoring a blank value means leaving it alone, not clearing it: a setter that starts
+     * coming back empty costs the update, not the value already reported.
      */
     public function testABlankOverwriteLeavesTheEarlierValueInPlace(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setCms('Bitrix', '22.0');
-        $unitpay->setCms('Bitrix', '');
+        $unitpay->setModule('unitpay-bitrix', '3.1');
+        $unitpay->setModule('unitpay-bitrix', '');
 
         $unitpay->payments()->getPayment(1);
 
         $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
-        $this->assertSame(['name' => 'Bitrix', 'version' => '22.0'], $decoded['cms']);
+        $this->assertSame(['name' => 'unitpay-bitrix', 'version' => '3.1'], $decoded['module']);
     }
 
     /** A value that is nothing but control characters has no usable half left. */
-    public function testAValueOfOnlyControlCharactersDropsTheSlot(): void
+    public function testAValueOfOnlyControlCharactersIsDropped(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setCms("\r\n\t", '22.0');
+        $unitpay->setModule("\r\n\t", '3.1');
 
         $unitpay->payments()->getPayment(1);
 
         $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
-        $this->assertArrayNotHasKey('cms', $decoded);
+        $this->assertArrayNotHasKey('module', $decoded);
     }
 
     /**
@@ -213,13 +302,13 @@ final class TelemetryTest extends TestCase
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setCms(str_repeat('中', 30), '1.0');
+        $unitpay->setModule(str_repeat('中', 30), '1.0');
 
         $unitpay->payments()->getPayment(1);
 
         $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
-        $this->assertSame(str_repeat('中', 21), $decoded['cms']['name']);
-        $this->assertSame(1, preg_match('//u', $decoded['cms']['name']));
+        $this->assertSame(str_repeat('中', 21), $decoded['module']['name']);
+        $this->assertSame(1, preg_match('//u', $decoded['module']['name']));
     }
 
     /**
@@ -232,7 +321,7 @@ final class TelemetryTest extends TestCase
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
         // "Битрикс" as a legacy windows-1251 install would hand it over: not valid UTF-8.
-        $unitpay->setCms("\xC1\xE8\xF2\xF0\xE8\xEA\xF1", '22.0');
+        $unitpay->setModule("\xC1\xE8\xF2\xF0\xE8\xEA\xF1", '22.0');
 
         $unitpay->payments()->getPayment(1);
 
@@ -242,7 +331,7 @@ final class TelemetryTest extends TestCase
         $decoded = json_decode($client, true);
         $this->assertSame(Unitpay::VERSION, $decoded['sdk_version']);
         $this->assertSame(PHP_VERSION, $decoded['lang_version']);
-        $this->assertArrayHasKey('cms', $decoded);
+        $this->assertArrayHasKey('module', $decoded);
 
         $this->assertSame(
             'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
@@ -258,7 +347,7 @@ final class TelemetryTest extends TestCase
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
-        $unitpay->setCms('1С-Битрикс', '22.0');
+        $unitpay->setModule('1С-Битрикс', '22.0');
 
         $unitpay->payments()->getPayment(1);
 
@@ -266,10 +355,120 @@ final class TelemetryTest extends TestCase
         $this->assertSame(1, preg_match('/^[\x20-\x7E]+$/', $client));
 
         $decoded = json_decode($client, true);
-        $this->assertSame(['name' => '1С-Битрикс', 'version' => '22.0'], $decoded['cms']);
+        $this->assertSame(['name' => '1С-Битрикс', 'version' => '22.0'], $decoded['module']);
 
         $this->assertSame(
             'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
+            $transport->header('User-Agent')
+        );
+    }
+
+    /**
+     * Everything above is the module path. The stack is a second, unbounded input surface, so
+     * each guarantee has to hold per entry — and one bad entry must not take its neighbours
+     * with it.
+     */
+    public function testControlCharactersInAStackEntryCannotAddAHeaderLine(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack(["evil\r\nX-Injected: 1" => '1.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $ua = (string) $transport->header('User-Agent');
+        $this->assertStringNotContainsString("\r", $ua);
+        $this->assertStringNotContainsString("\n", $ua);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame('evilX-Injected: 1', $decoded['stack'][0]['name']);
+    }
+
+    public function testAStackEntryOfOnlyControlCharactersIsDroppedWithoutItsNeighbours(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack([
+            'WordPress'  => '6.5',
+            "\r\n\t"     => '1.0',
+            'WooCommerce' => '8.2',
+        ]);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(['WordPress', 'WooCommerce'], array_column($decoded['stack'], 'name'));
+    }
+
+    public function testABlankVersionDropsOnlyItsOwnStackEntry(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        // Exactly what a CMS that stops exposing its version hands over.
+        $unitpay->setStack(['WordPress' => '6.5', 'WooCommerce' => '', 'Bitrix' => '22.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(['WordPress', 'Bitrix'], array_column($decoded['stack'], 'name'));
+    }
+
+    public function testAnOverlongStackEntryIsTruncatedOnACharacterBoundary(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack([str_repeat('中', 30) => '1.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $decoded = json_decode((string) $transport->header('Unitpay-Client'), true);
+        $this->assertSame(str_repeat('中', 21), $decoded['stack'][0]['name']);
+        $this->assertSame(1, preg_match('//u', $decoded['stack'][0]['name']));
+    }
+
+    public function testAnInvalidlyEncodedStackEntryCannotBlankTheHeader(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        // "Битрикс" in windows-1251: not valid UTF-8.
+        $unitpay->setStack(["\xC1\xE8\xF2\xF0\xE8\xEA\xF1" => '22.0']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $client = (string) $transport->header('Unitpay-Client');
+        $this->assertNotSame('', $client);
+
+        $decoded = json_decode($client, true);
+        $this->assertSame(Unitpay::VERSION, $decoded['sdk_version']);
+        $this->assertSame(PHP_VERSION, $decoded['lang_version']);
+        $this->assertCount(1, $decoded['stack']);
+
+        $this->assertSame(
+            'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION,
+            $transport->header('User-Agent')
+        );
+    }
+
+    public function testANonAsciiStackEntryRidesInTheJsonHeaderOnly(): void
+    {
+        $transport = new FakeTransport();
+        $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
+        $unitpay->setStack(['Bitrix' => '22.0', 'Аспро: Магазин' => '1.8.2']);
+
+        $unitpay->payments()->getPayment(1);
+
+        $client = (string) $transport->header('Unitpay-Client');
+        $this->assertSame(1, preg_match('/^[\x20-\x7E]+$/', $client));
+
+        $decoded = json_decode($client, true);
+        $this->assertSame(
+            ['name' => 'Аспро: Магазин', 'version' => '1.8.2'],
+            $decoded['stack'][1]
+        );
+
+        // The ASCII entry still makes the User-Agent; the other one is absent, not mangled.
+        $this->assertSame(
+            'unitpay-php-sdk/' . Unitpay::VERSION . ' api/' . Unitpay::API_VERSION . ' Bitrix/22.0',
             $transport->header('User-Agent')
         );
     }

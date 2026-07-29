@@ -116,42 +116,37 @@ final class Unitpay
     }
 
     /**
-     * Names the CMS this integration runs on, e.g. setCms('Bitrix', '22.0').
+     * Names the integration itself — the module, plugin, template or application wrapping
+     * this SDK, e.g. setModule('unitpay-bitrix', '3.1').
      *
-     * The value rides along in User-Agent and Unitpay-Client on every service call. It
-     * is a product name and version only — no PII, no identifiers. Most Unitpay
-     * integrations are CMS modules, and without this the fingerprint cannot tell one
-     * apart from a bare script.
+     * The value rides along in User-Agent and Unitpay-Client on every service call. It is a
+     * product name and version only — no PII, no identifiers. Without it the fingerprint
+     * cannot tell a shipped module apart from a bare script.
      *
-     * A blank name or version is ignored rather than rejected: telemetry never throws into
-     * a payment flow.
-     */
-    public function setCms(string $name, string $version): self
-    {
-        $this->clientInfo->setSlot(ClientInfo::SLOT_CMS, $name, $version);
-        return $this;
-    }
-
-    /**
-     * Names the framework this integration runs on, e.g. setFramework('Laravel', '11.0').
-     *
-     * A blank name or version is ignored rather than rejected.
-     */
-    public function setFramework(string $name, string $version): self
-    {
-        $this->clientInfo->setSlot(ClientInfo::SLOT_FRAMEWORK, $name, $version);
-        return $this;
-    }
-
-    /**
-     * Names the module or plugin wrapping this SDK, e.g.
-     * setModule('unitpay-bitrix', '3.1').
-     *
-     * A blank name or version is ignored rather than rejected.
+     * A blank name or version is ignored rather than rejected: telemetry never throws into a
+     * payment flow.
      */
     public function setModule(string $name, string $version): self
     {
-        $this->clientInfo->setSlot(ClientInfo::SLOT_MODULE, $name, $version);
+        $this->clientInfo->setModule($name, $version);
+        return $this;
+    }
+
+    /**
+     * Names the products this integration runs on, outermost host first:
+     * setStack(['WordPress' => '6.5', 'WooCommerce' => '8.2']).
+     *
+     * The runtime does not belong here — PHP and the OS are reported automatically. The rule
+     * is: if the SDK can find it out itself, it is not stack.
+     *
+     * Replaces the whole stack, so the call is idempotent. Nothing is rejected: an entry with
+     * a blank half is dropped without taking its neighbours, and at most eight are sent.
+     *
+     * @param array<string|int, scalar|null> $stack product name => version
+     */
+    public function setStack(array $stack): self
+    {
+        $this->clientInfo->setStack($stack);
         return $this;
     }
 
