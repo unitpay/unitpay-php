@@ -5,6 +5,7 @@ namespace Tests\Webhook;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\FakeTransport;
 use Unitpay\Exception\UnitpayIpException;
+use Unitpay\Exception\UnitpayValidationException;
 use Unitpay\Signature\SignatureBuilder;
 use Unitpay\Unitpay;
 use Unitpay\Webhook\WebhookVerifier;
@@ -190,6 +191,84 @@ final class AllowedIpsTest extends TestCase
         $this->assertSame([], $webhook->getAllowedIps());
         $this->expectException(UnitpayIpException::class);
         $webhook->checkHandlerRequest();
+    }
+
+    // --- manual entry validation ------------------------------------------
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public function malformedEntryProvider(): array
+    {
+        return [
+            'trailing junk'        => ['31.186.100.4 9'],
+            'prefix out of range'  => ['31.186.100.0/33'],
+            'not an address'       => ['garbage'],
+            'octet out of range'   => ['999.999.999.999'],
+            'empty string'         => [''],
+        ];
+    }
+
+    /**
+     * A typo used to be silent: the entry matched nothing and every webhook was refused
+     * with a bare "IP address Error".
+     *
+     * @dataProvider malformedEntryProvider
+     */
+    public function testSetAllowedIpsRejectsMalformedEntry(string $entry): void
+    {
+        $webhook = (new Unitpay('unitpay.ru', self::SECRET))->webhook();
+
+        $this->expectException(UnitpayValidationException::class);
+        $this->expectExceptionMessage('Invalid IP allowlist entry');
+        $webhook->setAllowedIps([$entry]);
+    }
+
+    /**
+     * @dataProvider malformedEntryProvider
+     */
+    public function testAddAllowedIpsRejectsMalformedEntry(string $entry): void
+    {
+        $webhook = (new Unitpay('unitpay.ru', self::SECRET))->webhook();
+
+        $this->expectException(UnitpayValidationException::class);
+        $webhook->addAllowedIps([$entry]);
+    }
+
+    /** The whole call is rejected, so the allowlist is never left half-configured. */
+    public function testRejectedCallLeavesThePreviousAllowlistIntact(): void
+    {
+        $webhook = (new Unitpay('unitpay.ru', self::SECRET))->webhook();
+        $webhook->setAllowedIps(['203.0.113.7']);
+
+        try {
+            $webhook->setAllowedIps(['198.51.100.5', 'garbage']);
+            $this->fail('expected the malformed entry to be rejected');
+        } catch (UnitpayValidationException $e) {
+            // expected
+        }
+
+        $this->assertSame(['203.0.113.7'], $webhook->getAllowedIps());
+    }
+
+    public function testValidIpv4Ipv6AndCidrEntriesAreAccepted(): void
+    {
+        $webhook = (new Unitpay('unitpay.ru', self::SECRET))->webhook();
+
+        $webhook->setAllowedIps(['203.0.113.7', '203.0.113.0/24', '2001:db8::1', '2001:db8::/32']);
+
+        $this->assertSame(
+            ['203.0.113.7', '203.0.113.0/24', '2001:db8::1', '2001:db8::/32'],
+            $webhook->getAllowedIps()
+        );
+    }
+
+    /** The feed path stays fail-safe: it drops bad entries instead of throwing. */
+    public function testFeedRefreshStillDoesNotThrowOnMalformedEntries(): void
+    {
+        $webhook = $this->handler($this->feed(['garbage', '31.186.100.0/33']), self::DEFAULT_IP);
+
+        $this->assertTrue($webhook->refreshAllowedIps()->checkHandlerRequest());
     }
 
     // --- matcher cache reset ---------------------------------------------

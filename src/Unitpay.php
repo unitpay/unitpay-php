@@ -2,16 +2,18 @@
 
 namespace Unitpay;
 
+use Unitpay\Api\AbstractService;
 use Unitpay\Api\PaymentService;
 use Unitpay\Api\PayoutService;
 use Unitpay\Api\PendingParams;
 use Unitpay\Api\ReferenceService;
 use Unitpay\Api\SubscriptionService;
 use Unitpay\Exception\UnitpayValidationException;
-use Unitpay\Http\CurlTransport;
+use Unitpay\Http\DefaultTransport;
 use Unitpay\Http\TransportInterface;
 use Unitpay\Model\CashItem;
 use Unitpay\Signature\SignatureBuilder;
+use Unitpay\Telemetry\ClientInfo;
 use Unitpay\Webhook\WebhookVerifier;
 
 /**
@@ -25,7 +27,7 @@ use Unitpay\Webhook\WebhookVerifier;
 final class Unitpay
 {
     /** SDK version; sent in the telemetry fingerprint. Keep in sync with the release git tag. */
-    public const VERSION = '3.0.0';
+    public const VERSION = '4.0.0';
 
     /** Unitpay API surface this SDK targets; sent in the telemetry fingerprint. */
     public const API_VERSION = 'v1';
@@ -36,6 +38,7 @@ final class Unitpay
     private TransportInterface $transport;
     private SignatureBuilder $signature;
     private PendingParams $pending;
+    private ClientInfo $clientInfo;
     private WebhookVerifier $webhookVerifier;
     private ?PaymentService $payments = null;
     private ?SubscriptionService $subscriptions = null;
@@ -43,9 +46,14 @@ final class Unitpay
     private ?ReferenceService $reference = null;
 
     /**
-     * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path.
-     * @param TransportInterface|null $transport outbound HTTP transport for api()/feed fetch.
-     *                                 Defaults to CurlTransport. Inject a fake to test without the network.
+     * @param string $domain host only, e.g. "unitpay.ru" — without scheme or path,
+     *                       optionally with a :port.
+     * @param TransportInterface|null $transport outbound HTTP transport for the service calls
+     *                                 and the IP-feed fetch. Defaults to a CurlTransport wrapped
+     *                                 in a RetryingTransport, which repeats an attempt only when
+     *                                 it provably never reached Unitpay. Pass
+     *                                 DefaultTransport::withoutRetries() to switch retries off,
+     *                                 or a fake to test without the network.
      * @param array<string, mixed>|null $request inbound webhook array read by the webhook
      *                                   verifier. Defaults to $_GET.
      * @param string|null $clientIp sender IP used by the webhook verifier. Defaults to
@@ -58,13 +66,15 @@ final class Unitpay
         ?array $request = null,
         ?string $clientIp = null
     ) {
+        $this->assertValidDomain($domain);
         $this->secretKey = $secretKey;
         $this->apiUrl = "https://$domain/api";
         $this->formUrl = "https://$domain/pay/";
         $ipsUrl = "https://$domain/ips/ips_webhooks.json";
-        $this->transport = $transport ?? new CurlTransport();
+        $this->transport = $transport ?? DefaultTransport::create();
         $this->signature = new SignatureBuilder();
         $this->pending = new PendingParams();
+        $this->clientInfo = new ClientInfo(self::VERSION, self::API_VERSION);
         $this->webhookVerifier = new WebhookVerifier(
             $secretKey,
             $this->signature,
@@ -103,6 +113,51 @@ final class Unitpay
     public function webhook(): WebhookVerifier
     {
         return $this->webhookVerifier;
+    }
+
+    /**
+     * Names the integration itself — the module, plugin, template or application wrapping
+     * this SDK, e.g. setModule('unitpay-bitrix', '3.1').
+     *
+     * The value rides along in User-Agent and Unitpay-Client on every service call. It is a
+     * product name and version only — no PII, no identifiers. Without it the fingerprint
+     * cannot tell a shipped module apart from a bare script.
+     *
+     * A blank name or version is ignored rather than rejected: telemetry never throws into a
+     * payment flow.
+     */
+    public function setModule(string $name, string $version): self
+    {
+        $this->clientInfo->setModule($name, $version);
+        return $this;
+    }
+
+    /**
+     * Names the products this integration runs on, outermost host first:
+     * setStack(['WordPress' => '6.5', 'WooCommerce' => '8.2']).
+     *
+     * The runtime does not belong here — PHP and the OS are reported automatically. The rule
+     * is: if the SDK can find it out itself, it is not stack.
+     *
+     * Replaces the whole stack, so the call is idempotent. Nothing is rejected: an entry with
+     * a blank half is dropped without taking its neighbours, and at most eight are sent.
+     *
+     * @param array<string|int, scalar|null> $stack product name => version
+     */
+    public function setStack(array $stack): self
+    {
+        $this->clientInfo->setStack($stack);
+        return $this;
+    }
+
+    /**
+     * Stops sending the Unitpay-Client header. The User-Agent keeps naming the SDK and
+     * its version, which is what makes a request supportable at all.
+     */
+    public function disableTelemetry(): self
+    {
+        $this->clientInfo->disable();
+        return $this;
     }
 
     /**
@@ -203,19 +258,39 @@ final class Unitpay
     }
 
     /**
-     * @param class-string<PaymentService|SubscriptionService|PayoutService|ReferenceService> $class
-     * @return PaymentService|SubscriptionService|PayoutService|ReferenceService
+     * @template T of AbstractService
+     * @param class-string<T> $class
+     * @return T
      */
-    private function makeService(string $class)
+    private function makeService(string $class): AbstractService
     {
         return new $class(
             $this->transport,
             $this->apiUrl,
             $this->secretKey,
             $this->pending,
-            self::VERSION,
-            self::API_VERSION
+            $this->clientInfo
         );
+    }
+
+    /**
+     * Rejects anything that is not a bare host (optionally with a port). The domain is
+     * interpolated into the API, form and IP-feed URLs, so a scheme or path would produce
+     * malformed URLs.
+     *
+     * @throws UnitpayValidationException when $domain is not a bare host
+     */
+    private function assertValidDomain(string $domain): void
+    {
+        // Labels of 1-63 alphanumerics/hyphens (not hyphen-edged), 253 chars total, optional :port.
+        $label = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
+        $host = '(?:' . $label . '\.)*' . $label;
+        if (preg_match('~^(?=.{1,253}(?::|$))' . $host . '(?::\d{1,5})?$~', $domain) !== 1) {
+            throw new UnitpayValidationException(
+                'Domain must be a bare host such as "unitpay.ru", without scheme, path or query, got '
+                . var_export($domain, true)
+            );
+        }
     }
 
     /**

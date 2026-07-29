@@ -26,6 +26,19 @@ $item->setMeasure(Measure::ITEM);
 $unitpay->setCashItems([$item]);
 ```
 
+The receipt waits on the instance until one of the three calls that accept it runs —
+`form()`, `payments()->initPayment()` or `payments()->offsetAdvance()` — and is cleared
+there. Other service calls ignore it, so a lookup in between is harmless:
+
+```php
+$unitpay->setCashItems([$item]);
+$unitpay->payments()->getPayment($someOtherId);   // receipt untouched
+$unitpay->payments()->initPayment(...);           // receipt arrives here
+```
+
+A consuming call clears the receipt even if the request fails, so a retry must call
+`setCashItems()` again. See [Fluent parameters](api-methods.md#fluent-parameters).
+
 The dictionaries live in `Unitpay\Model\Enum` as const-classes: `Nds`, `PaymentObject`,
 `PaymentMethod`, `Measure` (and `PaymentType` for payment-method codes). They are plain
 classes with `public const`, not native enums, because the SDK supports PHP 7.4.
@@ -33,10 +46,6 @@ classes with `public const`, not native enums, because the SDK supports PHP 7.4.
 > Since 2026 the backend fiscalizes `Nds::VAT20` (`vat20`) as VAT **22%** — there is no
 > separate path for "real" 20%. Pick the rate that matches the actual receipt (see
 > [CHANGELOG.md](../CHANGELOG.md)).
-
-Some payment-object values are kept only for backward compatibility and are rejected by
-the public API: `EXCISE`, `GAMBLING_BET`, `GAMBLING_PRIZE`, `LOTTERY_PRIZE`, `COMPOSITE`.
-Do not use them in new code; they are slated for removal in 4.0.
 
 ## See Also
 

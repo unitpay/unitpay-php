@@ -1,0 +1,30 @@
+# Static analysis for examples/, which phpstan.neon deliberately leaves out.
+#
+# examples/ is the source of truth for usage samples, so a renamed class, a renamed method
+# or a changed argument count there must fail the build. `composer lint` only syntax-checks
+# the directory, which leaves all three invisible.
+#
+# Why level 2 and one suppression rather than a lower level: catching a renamed method
+# needs method existence checked on *expressions*, and the examples call everything through
+# a variable (`$unitpay->initPayment(...)`), never through `$this`. That check arrives at
+# level 2 — at level 0 the whole point of this config is missed, verified by probing it with
+# a call to a method that does not exist.
+#
+# The one thing level 2 cannot do here is resolve the variables: every example pulls
+# $unitpay and the order data in through `require` of config.php / order.php, which PHPStan
+# does not follow, so all 56 findings above level 0 are `variable.undefined` on exactly
+# those variables. Suppressing that single identifier keeps the real checks — unknown
+# classes, unknown methods, wrong arity, PHPDoc validity — and drops nothing else.
+# reportUnmatchedIgnoredErrors is off so that restructuring an example cannot fail the
+# build for having *fewer* false positives than before.
+parameters:
+    level: 2
+    paths:
+        - examples
+    bootstrapFiles:
+        - vendor/autoload.php
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        -
+            identifier: variable.undefined
+            path: examples/*

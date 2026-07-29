@@ -14,16 +14,22 @@ Everything hangs off one entry point, `Unitpay\Unitpay`, which hands out service
 
 Official Unitpay documentation: [help.unitpay.ru](https://help.unitpay.ru)
 
-> **Upgrading from 2.x?** 3.0 moves every class into the `Unitpay\` namespace and replaces
+> **Upgrading from 3.x?** 4.0 changes the `TransportInterface` contract and starts
+> rejecting webhooks older than 5 minutes. If you use the SDK's own transport and your
+> server clock is synchronised, it is a version bump — see the
+> [v4 Migration Guide](docs/migration-v4.md).
+>
+> **Upgrading from 2.x?** 3.0 moved every class into the `Unitpay\` namespace and replaced
 > `api('method', [...])` with typed service methods. There is no compatibility shim —
-> see the [v3 Migration Guide](docs/migration-v3.md).
+> see the [v3 Migration Guide](docs/migration-v3.md), then the v4 guide.
 
 ## Requirements
 
 * PHP >= 7.4
 * ext-json
+* ext-ctype
 
-No runtime dependencies. `ext-curl` is optional: the default transport uses it when
+No Composer dependencies. `ext-curl` is optional: the default transport uses it when
 present and falls back to `file_get_contents()` otherwise.
 
 ## Installation
@@ -78,7 +84,7 @@ Prefer a server-to-server call? Use `$unitpay->payments()->initPayment(...)` —
 * **Swappable transport** — inject any `Unitpay\Http\TransportInterface` to plug in your
   own HTTP stack or to test without the network.
 * **Typed exceptions** — all implement `UnitpayExceptionInterface`.
-* **Zero dependencies** — `ext-json` only (`ext-curl` optional).
+* **Zero dependencies** — no Composer packages; `ext-json` + `ext-ctype` (`ext-curl` optional).
 
 ## Documentation
 
@@ -88,7 +94,8 @@ Prefer a server-to-server call? Use `$unitpay->payments()->initPayment(...)` —
 | [Fiscal Receipts](docs/receipts.md) | 54-FZ receipt line items via `CashItem` |
 | [API Methods](docs/api-methods.md) | Full service reference and account-level calls |
 | [Webhooks](docs/webhooks.md) | Payment handler + keeping the IP allowlist fresh |
-| [Telemetry](docs/telemetry.md) | Anonymous SDK version fingerprint |
+| [Telemetry](docs/telemetry.md) | Anonymous SDK fingerprint and naming your integration |
+| [v4 Migration Guide](docs/migration-v4.md) | Upgrading from 3.x to 4.0 |
 | [v3 Migration Guide](docs/migration-v3.md) | Upgrading from 2.x to 3.0 |
 
 Runnable samples for every method group live in [`examples/`](examples).

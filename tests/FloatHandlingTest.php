@@ -35,7 +35,9 @@ final class FloatHandlingTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * parse_str() yields string values plus arrays for bracketed keys, hence the union.
+     *
+     * @return array<int|string, array<mixed>|string>
      */
     private function queryOf(string $url): array
     {

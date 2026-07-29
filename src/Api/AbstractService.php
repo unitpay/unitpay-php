@@ -2,10 +2,15 @@
 
 namespace Unitpay\Api;
 
+use Unitpay\Exception\UnitpayHttpException;
+use Unitpay\Exception\UnitpayNetworkException;
+use Unitpay\Exception\UnitpayResponseException;
 use Unitpay\Exception\UnitpayTransportException;
 use Unitpay\Exception\UnitpayValidationException;
+use Unitpay\Http\Response;
 use Unitpay\Http\TransportInterface;
 use Unitpay\Signature\SignatureBuilder;
+use Unitpay\Telemetry\ClientInfo;
 
 /**
  * Shared request pipeline for the API services: merges accumulated fluent params,
@@ -18,31 +23,44 @@ abstract class AbstractService
     private string $apiUrl;
     private ?string $secretKey;
     private PendingParams $pending;
-    private string $sdkVersion;
-    private string $apiVersion;
+    private ClientInfo $clientInfo;
 
     public function __construct(
         TransportInterface $transport,
         string $apiUrl,
         ?string $secretKey,
         PendingParams $pending,
-        string $sdkVersion,
-        string $apiVersion
+        ClientInfo $clientInfo
     ) {
         $this->transport = $transport;
         $this->apiUrl = $apiUrl;
         $this->secretKey = $secretKey;
         $this->pending = $pending;
-        $this->sdkVersion = $sdkVersion;
-        $this->apiVersion = $apiVersion;
+        $this->clientInfo = $clientInfo;
     }
 
     /**
-     * Runs a server-to-server call. Accumulated fluent params (cashItems, backUrl, ...)
-     * are drained and merged, with the explicit call params taking precedence. An
-     * explicit non-empty secretKey overrides the instance key so account-level methods
-     * (getPartner, payouts, ...) can use the account key. The params are cleared as part
-     * of drain(), symmetric with form().
+     * Merges the accumulated fluent params (cashItems, backUrl, customerEmail,
+     * customerPhone) into a call's own params and clears them; explicit call params take
+     * precedence. Only initPayment() and offsetAdvance() accept them.
+     *
+     * Clearing happens before the request, so a failed call consumes them too and a retry
+     * must re-apply the setters — symmetric with form().
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    protected function withPending(array $params): array
+    {
+        return array_merge($this->pending->drain(), $params);
+    }
+
+    /**
+     * Runs a server-to-server call. An explicit non-empty secretKey overrides the instance
+     * key so account-level methods (getPartner, payouts, ...) can use the account key.
+     *
+     * This does NOT touch the accumulated fluent params: a consuming method opts in
+     * explicitly by wrapping its params in withPending().
      *
      * @param array<string, mixed> $params
      * @throws UnitpayValidationException when the secret key is unset/empty
@@ -50,8 +68,6 @@ abstract class AbstractService
      */
     protected function request(string $method, array $params): object
     {
-        $params = array_merge($this->pending->drain(), $params);
-
         if (empty($params['secretKey'])) {
             $params['secretKey'] = $this->secretKey;
         }
@@ -68,33 +84,69 @@ abstract class AbstractService
             PHP_QUERY_RFC3986
         );
 
-        $response = json_decode($this->transport->send($requestUrl, $this->fingerprintHeaders()));
-        if (!is_object($response)) {
-            throw new UnitpayTransportException('Temporary server error. Please try again later.');
-        }
-
-        return $response;
+        return $this->decode($this->transport->request($requestUrl, $this->clientInfo->headers()));
     }
 
     /**
-     * SDK self-identification headers (anonymous, no PII): a short User-Agent plus an
-     * X-Unitpay-Client JSON object. api_version is the Unitpay API surface targeted;
-     * platform is the coarse OS family only.
-     * @return string[]
+     * Turns a transport result into the decoded JSON envelope, or into the exception that
+     * describes what actually went wrong. Before 4.0 every branch below collapsed into one
+     * "Temporary server error" — including a disabled allow_url_fopen, which is permanent.
+     *
+     * @throws UnitpayNetworkException  no response arrived
+     * @throws UnitpayHttpException     a response arrived with a non-2xx status
+     * @throws UnitpayResponseException a 2xx arrived whose body is not a JSON object
      */
-    private function fingerprintHeaders(): array
+    private function decode(Response $response): object
     {
-        $client = (string) json_encode([
-            'sdk_version'  => $this->sdkVersion,
-            'api_version'  => $this->apiVersion,
-            'lang'         => 'php',
-            'lang_version' => PHP_VERSION,
-            'platform'     => PHP_OS_FAMILY,
-            'publisher'    => 'unitpay',
-        ]);
-        return [
-            'User-Agent: unitpay-php-sdk/' . $this->sdkVersion . ' api/' . $this->apiVersion,
-            'X-Unitpay-Client: ' . $client,
-        ];
+        if ($response->getStatusCode() === 0) {
+            throw new UnitpayNetworkException(
+                $this->networkMessage($response),
+                $response->getErrno(),
+                $response->getTransportError()
+            );
+        }
+
+        if (!$response->isSuccessful()) {
+            throw new UnitpayHttpException(
+                sprintf('Unitpay API returned HTTP %d.', $response->getStatusCode()),
+                $response->getStatusCode(),
+                $response->getBody()
+            );
+        }
+
+        $decoded = json_decode($response->getBody());
+        if (!is_object($decoded)) {
+            throw new UnitpayResponseException(
+                sprintf(
+                    'Unitpay API returned HTTP %d with a body that is not a JSON object (%s).',
+                    $response->getStatusCode(),
+                    json_last_error_msg()
+                ),
+                $response->getStatusCode(),
+                $response->getBody()
+            );
+        }
+
+        return $decoded;
     }
+
+    /**
+     * Whether the request reached Unitpay decides what the caller may safely do next, so
+     * the message says it outright. The API accepts no idempotency key, so a blind repeat
+     * of a delivered initPayment can create a second payment.
+     */
+    private function networkMessage(Response $response): string
+    {
+        $detail = sprintf('%s (error %d)', $response->getTransportError(), $response->getErrno());
+
+        if ($response->wasRequestSent()) {
+            return 'No response from the Unitpay API: ' . $detail
+                . '. The request was sent, so it may already have been processed — check the'
+                . ' payment state before repeating it.';
+        }
+
+        return 'Could not reach the Unitpay API: ' . $detail
+            . '. The request was not sent, so nothing was processed.';
+    }
+
 }

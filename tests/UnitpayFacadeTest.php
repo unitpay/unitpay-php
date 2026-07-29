@@ -8,6 +8,9 @@ use Unitpay\Api\PaymentService;
 use Unitpay\Api\PayoutService;
 use Unitpay\Api\ReferenceService;
 use Unitpay\Api\SubscriptionService;
+use Unitpay\Exception\UnitpayValidationException;
+use Unitpay\Http\CurlTransport;
+use Unitpay\Http\RetryingTransport;
 use Unitpay\Model\CashItem;
 use Unitpay\Unitpay;
 use Unitpay\Webhook\WebhookVerifier;
@@ -72,18 +75,77 @@ final class UnitpayFacadeTest extends TestCase
     }
 
     /**
-     * The fluent setters live on the facade but their params belong to whichever service
-     * is called next — the pending-params holder is shared, not per-service.
+     * The pending-params holder is shared across services rather than per-service, so a
+     * receipt set on the facade reaches PaymentService — but only the calls that accept it:
+     * a payout lookup in between neither receives nor consumes it.
      */
-    public function testAccumulatedParamsReachAnyService(): void
+    public function testAccumulatedParamsReachTheConsumingServiceOnly(): void
     {
         $transport = new FakeTransport();
         $unitpay = new Unitpay('unitpay.test', 'secret', $transport);
 
         $unitpay->setCashItems([new CashItem('Coffee', 1, 100.0)]);
         $unitpay->payouts()->massPaymentCommissions('partner@example.com');
+        $unitpay->payments()->initPayment('order-1', 100, 7, 'card');
 
-        $this->assertArrayHasKey('cashItems', $transport->query());
+        $this->assertArrayNotHasKey('cashItems', $transport->query(0));
+        $this->assertArrayHasKey('cashItems', $transport->query(1));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public function validDomainProvider(): array
+    {
+        return [
+            'production'      => ['unitpay.ru'],
+            'test tld'        => ['unitpay.test'],
+            'subdomain'       => ['sandbox.unitpay.ru'],
+            'single label'    => ['localhost'],
+            'host with port'  => ['localhost:8080'],
+            'hyphenated'      => ['my-shop.example.com'],
+        ];
+    }
+
+    /**
+     * @dataProvider validDomainProvider
+     */
+    public function testConstructorAcceptsBareHost(string $domain): void
+    {
+        $this->assertInstanceOf(Unitpay::class, new Unitpay($domain, 'secret'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public function invalidDomainProvider(): array
+    {
+        return [
+            'with scheme'     => ['https://unitpay.ru'],
+            'scheme only'     => ['http://'],
+            'with path'       => ['unitpay.ru/api'],
+            'with query'      => ['unitpay.ru?x=1'],
+            'with fragment'   => ['unitpay.ru#frag'],
+            'with userinfo'   => ['user@unitpay.ru'],
+            'leading space'   => [' unitpay.ru'],
+            'trailing space'  => ['unitpay.ru '],
+            'empty'           => [''],
+            'hyphen edged'    => ['-unitpay.ru'],
+            'double dot'      => ['unitpay..ru'],
+        ];
+    }
+
+    /**
+     * A scheme or path used to sail through and surface later as a transport error or an
+     * allowlist that silently failed to refresh.
+     *
+     * @dataProvider invalidDomainProvider
+     */
+    public function testConstructorRejectsAnythingButABareHost(string $domain): void
+    {
+        $this->expectException(UnitpayValidationException::class);
+        $this->expectExceptionMessage('Domain must be a bare host');
+        new Unitpay($domain, 'secret');
     }
 
     /** The domain given to the constructor drives every endpoint the facade builds. */
@@ -99,12 +161,36 @@ final class UnitpayFacadeTest extends TestCase
         $this->assertStringStartsWith('https://unitpay.test/api?', $transport->lastUrl());
     }
 
-    /** Without an injected transport the facade still builds — it falls back to CurlTransport. */
+    /** Without an injected transport the facade still builds — it falls back to the default stack. */
     public function testFacadeIsUsableWithoutAnInjectedTransport(): void
     {
         $unitpay = new Unitpay('unitpay.test', 'secret');
 
         $this->assertInstanceOf(PaymentService::class, $unitpay->payments());
         $this->assertStringStartsWith('https://unitpay.test/pay/pk?', $unitpay->form('pk', 100, 'acc', 'desc'));
+    }
+
+    /**
+     * Retries being on by default is a promise made in the CHANGELOG and in
+     * docs/getting-started.md, and it lives in exactly one line of wiring. Every other test
+     * injects a FakeTransport, so replacing DefaultTransport::create() with a bare
+     * `new CurlTransport()` would leave the whole suite green while the promise quietly
+     * stopped being true. This is the assertion that notices.
+     *
+     * Reflection rather than a public getter: which transport the facade composed is an
+     * implementation detail, and exposing it just to test it would put it in the API.
+     */
+    public function testFacadeDefaultsToTheRetryingStack(): void
+    {
+        $property = new \ReflectionProperty(Unitpay::class, 'transport');
+        if (\PHP_VERSION_ID < 80100) {
+            // Required before 8.1, and deprecated from 8.5 — call it only where it does something.
+            $property->setAccessible(true);
+        }
+
+        $transport = $property->getValue(new Unitpay('unitpay.test', 'secret'));
+
+        $this->assertInstanceOf(RetryingTransport::class, $transport);
+        $this->assertInstanceOf(CurlTransport::class, $transport->getInner());
     }
 }

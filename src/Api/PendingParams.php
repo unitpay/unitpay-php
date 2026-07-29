@@ -4,9 +4,11 @@ namespace Unitpay\Api;
 
 /**
  * Mutable holder for the fluent-setter params (cashItems, customerEmail, backUrl,
- * customerPhone) accumulated on the facade. Shared between the facade and its
- * services so a setter chain reaches the next form()/service call, then drained so a
- * reused instance never carries this call's params into the following one.
+ * customerPhone) accumulated on the facade. Shared between the facade and its services.
+ *
+ * Only form(), initPayment() and offsetAdvance() read and drain them; every other call
+ * leaves them untouched. A consuming call clears them, so a reused instance never carries
+ * one order's receipt into the next.
  */
 final class PendingParams
 {
